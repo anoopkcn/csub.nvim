@@ -1,11 +1,11 @@
-local fmt = require("csubstitute.format")
+local fmt = require("csub.format")
 
 local M = {}
 
 local state = {
     bufnr = nil,
 }
-local ns = vim.api.nvim_create_namespace("csubstitute_meta")
+local ns = vim.api.nvim_create_namespace("csub_meta")
 
 local function chomp(str)
     local s = str or ""
@@ -48,10 +48,10 @@ local function set_metadata(bufnr, qf_entries)
 end
 
 local function on_changed(bufnr)
-    local qf_entries = vim.b[bufnr].csubstitute_orig_qflist or {}
+    local qf_entries = vim.b[bufnr].csub_orig_qflist or {}
     local target = #qf_entries
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    local previous = vim.b[bufnr].csubstitute_lines or lines
+    local previous = vim.b[bufnr].csub_lines or lines
 
     if #lines ~= target then
         vim.schedule(function()
@@ -61,12 +61,12 @@ local function on_changed(bufnr)
             vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, previous)
             set_metadata(bufnr, qf_entries)
             silence_modified(bufnr)
-            vim.notify("[csubstitute] Line count must remain unchanged.", vim.log.levels.WARN)
+            vim.notify("[csub] Line count must remain unchanged.", vim.log.levels.WARN)
         end)
         return
     end
 
-    vim.b[bufnr].csubstitute_lines = lines
+    vim.b[bufnr].csub_lines = lines
     set_metadata(bufnr, qf_entries)
     silence_modified(bufnr)
 end
@@ -84,7 +84,7 @@ local function close_list_windows()
 end
 
 local function populate_buffer(bufnr, qflist)
-    vim.b[bufnr].csubstitute_orig_qflist = qflist
+    vim.b[bufnr].csub_orig_qflist = qflist
     local lines = {}
     for _, entry in ipairs(qflist or {}) do
         table.insert(lines, chomp(entry.text))
@@ -92,16 +92,16 @@ local function populate_buffer(bufnr, qflist)
     vim.bo[bufnr].modifiable = true
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
     set_metadata(bufnr, qflist or {})
-    vim.b[bufnr].csubstitute_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    vim.b[bufnr].csub_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     vim.bo[bufnr].modified = false
 end
 
 local function do_replace(bufnr)
-    local qf_orig = vim.b[bufnr].csubstitute_orig_qflist or {}
+    local qf_orig = vim.b[bufnr].csub_orig_qflist or {}
     local new_text_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 
     if #new_text_lines ~= #qf_orig then
-        echoerr(string.format("csubstitute: Illegal edit: line number was changed from %d to %d.", #qf_orig,
+        echoerr(string.format("csub: Illegal edit: line number was changed from %d to %d.", #qf_orig,
             #new_text_lines))
         return
     end
@@ -109,7 +109,8 @@ local function do_replace(bufnr)
     vim.bo[bufnr].modified = false
 
     local after_cmd
-    if vim.o.hidden and (vim.g.csubstitute_no_save or 0) ~= 0 then
+    local no_save = vim.g.csub_no_save or vim.g.csubstitute_no_save or 0
+    if vim.o.hidden and no_save ~= 0 then
         after_cmd = "if &modified | setlocal buflisted | endif"
     else
         after_cmd = "update" .. (vim.v.cmdbang == 1 and "!" or "")
@@ -140,7 +141,7 @@ local function do_replace(bufnr)
         local original_text = chomp(entry.text)
         if current_line ~= original_text then
             if current_line ~= new_text then
-                echoerr(string.format("csubstitute: Original text has changed: %s:%d", vim.fn.bufname(entry.bufnr),
+                echoerr(string.format("csub: Original text has changed: %s:%d", vim.fn.bufname(entry.bufnr),
                     entry.lnum))
             end
         else
@@ -160,7 +161,7 @@ end
 local function open_replace_window(cmd, close_lists)
     local current_qflist = vim.fn.getqflist()
     if not current_qflist or vim.tbl_isempty(current_qflist) then
-        vim.notify("[csubstitute] No quickfix list available.", vim.log.levels.INFO)
+        vim.notify("[csub] No quickfix list available.", vim.log.levels.INFO)
         return
     end
 
@@ -184,8 +185,8 @@ local function open_replace_window(cmd, close_lists)
         vim.bo[bufnr].swapfile = false
         vim.bo[bufnr].bufhidden = "hide"
         vim.bo[bufnr].buftype = "acwrite"
-        vim.bo[bufnr].filetype = "csubstitute"
-        vim.api.nvim_buf_set_name(bufnr, "[csubstitute]")
+        vim.bo[bufnr].filetype = "csub"
+        vim.api.nvim_buf_set_name(bufnr, "[csub]")
         vim.api.nvim_create_autocmd("BufWriteCmd", {
             buffer = bufnr,
             nested = true,
@@ -220,19 +221,19 @@ function M.start(cmd, close_lists)
 end
 
 function M.quickfix_text(info)
-    return require("csubstitute.format").quickfix_text(info)
+    return require("csub.format").quickfix_text(info)
 end
 
 function M.setup()
-    vim.o.quickfixtextfunc = "v:lua.require'csubstitute'.quickfix_text"
-
-    vim.api.nvim_create_user_command("Csubstitute", function(opts)
-        M.start(opts.args, opts.bang)
-    end, { nargs = "?", bang = true })
+    vim.o.quickfixtextfunc = "v:lua.require'csub'.quickfix_text"
 
     vim.api.nvim_create_user_command("Csub", function(opts)
         M.start(opts.args, opts.bang)
     end, { nargs = "?", bang = true })
+
+    vim.api.nvim_create_user_command("Csubstitute", function(opts)
+        M.start(opts.args, opts.bang)
+    end, { nargs = "?", bang = true, desc = "Deprecated alias for Csub" })
 end
 
 return M
