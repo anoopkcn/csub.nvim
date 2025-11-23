@@ -20,7 +20,7 @@ require("csub").setup()
 Lazy.nvim example:
 ```lua
 {
-  "akc/csub.nvim",
+  "https://github.com/anoopkcn/csub.nvim",
   config = function()
     require("csub").setup()
   end,
@@ -30,7 +30,7 @@ Lazy.nvim example:
 Packer.nvim example:
 ```lua
 use({
-  "akc/csub.nvim",
+  "https://github.com/anoopkcn/csub.nvim",
   config = function()
     require("csub").setup()
   end,
