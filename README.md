@@ -48,7 +48,7 @@ use({
 Useful keymap:
 ```lua
 vim.keymap.set("n", "<leader>s", "<cmd>Csub!<cr>", { desc = "Csub the current quickfix" })
-``
+```
 
 ## Options
 
