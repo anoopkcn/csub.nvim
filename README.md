@@ -1,6 +1,6 @@
 # csub.nvim
 
-Edit the current quickfix list in a scratch buffer, with per-entry metadata so you know what you are changing. Write the buffer to push the updates back into the original files and quickfix list.
+Edit the current quickfix list in a scratch buffer. Write the buffer to push the updates back into the original files and quickfix list.
 
 ## Features
 - Opens the quickfix list in an editable buffer (`[csub]`, `filetype=csub`)
