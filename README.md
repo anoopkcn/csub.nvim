@@ -13,7 +13,7 @@ Edit the current quickfix list in a scratch buffer, with per-entry metadata so y
 
 vim.pack example (Neovim 0.12+):
 ```lua
-vim.pack.add("akc/csub.nvim")
+vim.pack.add({"https://github.com/anoopkcn/csub.nvim"})
 require("csub").setup()
 ```
 
