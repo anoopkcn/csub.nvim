@@ -45,6 +45,11 @@ use({
 3. Edit the lines directly; keep the line count unchanged.
 4. Write (`:w`) to apply changes back to the underlying files and quickfix list.
 
+Useful keymap:
+```lua
+vim.keymap.set("n", "<leader>s", "<cmd>Csub!<cr>", { desc = "Csub the current quickfix" })
+``
+
 ## Options
 
 - `g:csub_no_save`: when non-zero and `'hidden'` is set, avoid saving modified buffers when applying changes (leave them listed and modified). Default: 0.
