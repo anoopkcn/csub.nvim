@@ -1,7 +1,7 @@
 *csub.txt*       Quickfix batch editing with live metadata       *csub*
 
-Maintainer: Your name here
-Source:     https://github.com/akc/csub.nvim
+Maintainer: Anoop K Chandran
+Source:     https://github.com/anoopkcn/csub.nvim
 
 ==============================================================================
 INTRODUCTION                                                       *csub-intro*
