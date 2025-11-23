@@ -230,10 +230,6 @@ function M.setup()
     vim.api.nvim_create_user_command("Csub", function(opts)
         M.start(opts.args, opts.bang)
     end, { nargs = "?", bang = true })
-
-    vim.api.nvim_create_user_command("Csubstitute", function(opts)
-        M.start(opts.args, opts.bang)
-    end, { nargs = "?", bang = true, desc = "Deprecated alias for Csub" })
 end
 
 return M
