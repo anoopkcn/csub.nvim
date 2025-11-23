@@ -1,0 +1,64 @@
+*csub.txt*       Quickfix batch editing with live metadata       *csub*
+
+Maintainer: Your name here
+Source:     https://github.com/akc/csub.nvim
+
+==============================================================================
+INTRODUCTION                                                       *csub-intro*
+
+csub lets you edit the current quickfix list in a scratch buffer and write the
+changes back to the original files. It shows a metadata column (file|line:col)
+beside each entry to keep context while editing.
+
+==============================================================================
+SETUP                                                              *csub-setup*
+
+Load the module and call `setup()` once (Lua):
+
+>lua
+require("csub").setup()
+<
+
+This registers the `quickfixtextfunc` and the `:Csub` command.
+
+==============================================================================
+USAGE                                                              *csub-usage*
+
+- Populate a quickfix list (e.g. via `:make`, `:grep`, `:vim.diagnostic.setqflist`).
+- Run `:Csub[!]` to open the editable buffer for the current quickfix list.
+  - An optional command argument controls how the window opens (e.g. `:Csub vnew`).
+  - Use `:Csub!` to open and close existing quickfix/location list windows.
+- Edit the lines directly. Line count must stay unchanged; attempts to add or
+  remove lines are reverted with a warning.
+- Write (`:w`) to apply changes back to the underlying files/quickfix entries.
+
+==============================================================================
+COMMANDS                                                        *csub-commands*
+
+:Csub[!] [cmd]                                                     *:Csub*
+    Open the quickfix list in an editable buffer. If {cmd} is given, it is
+    used to create the window (e.g. `new`, `vnew`, `tabnew`). With [!], close
+    existing quickfix/location list windows after opening the buffer.
+
+==============================================================================
+OPTIONS                                                          *csub-options*
+
+g:csub_no_save                                                    *g:csub_no_save*
+    When set to a non-zero value and 'hidden' is enabled, avoid saving buffers
+    while applying changes (leave buffers modified but listed). Defaults to 0.
+
+==============================================================================
+NOTES                                                              *csub-notes*
+
+- The buffer uses `filetype=csub` and is named `[csub]`.
+- The metadata column is virtual text; wrapping is disabled locally.
+- Original text changes in target files are detected; if the current buffer
+  differs from the original quickfix text and from your edits, an error is
+  reported and that entry is left unchanged.
+
+==============================================================================
+LICENSE                                                          *csub-license*
+
+MIT (see repository).
+
+==============================================================================
