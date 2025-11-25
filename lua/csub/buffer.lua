@@ -65,6 +65,7 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
         return
     end
 
+    -- First check if state has a valid buffer
     if not (state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr)) then
         local existing = vim.fn.bufnr("[csub]")
         if existing ~= -1 and vim.api.nvim_buf_is_valid(existing) then
@@ -74,30 +75,27 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
 
     local bufnr = state.bufnr
 
+    -- If we have a valid buffer, reuse it
     if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
         vim.b[bufnr].csub_qf_bufnr = qf_bufnr
         vim.b[bufnr].csub_qf_winid = winid
-        vim.api.nvim_set_current_win(winid)
-        vim.api.nvim_set_current_buf(bufnr)
+        window.use_buf(winid, bufnr)
         window.apply_window_opts(winid)
         return bufnr
     end
 
-    vim.api.nvim_set_current_win(winid)
-
-    local old_csub = vim.fn.bufnr("[csub]")
-    if old_csub ~= -1 and vim.api.nvim_buf_is_valid(old_csub) then
-        vim.api.nvim_buf_delete(old_csub, { force = true })
-    end
-
-    vim.cmd("enew")
-    bufnr = vim.api.nvim_get_current_buf()
+    -- Create a new buffer only if no existing buffer found
+    bufnr = vim.api.nvim_create_buf(false, false)
     state.bufnr = bufnr
+    vim.api.nvim_buf_set_name(bufnr, "[csub]")
     vim.bo[bufnr].swapfile = false
     vim.bo[bufnr].bufhidden = "hide"
     vim.bo[bufnr].buftype = "acwrite"
     vim.bo[bufnr].filetype = "csub"
-    vim.api.nvim_buf_set_name(bufnr, "[csub]")
+
+    -- Display the new buffer in the target window
+    window.use_buf(winid, bufnr)
+
     vim.b[bufnr].csub_qf_bufnr = qf_bufnr
     vim.b[bufnr].csub_qf_winid = winid
     vim.api.nvim_create_autocmd("BufWriteCmd", {
