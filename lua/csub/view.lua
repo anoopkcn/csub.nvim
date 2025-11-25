@@ -36,9 +36,17 @@ function M.restore(winid, bufnr, view, cursor_line)
     local line = cursor_line or view.lnum or 1
     line = clamp_line(target_buf, line)
 
-    local restore = vim.deepcopy(view)
-    restore.lnum = line
-    restore.col = 0
+    -- Shallow copy is sufficient for view tables (all values are primitives)
+    local restore = {
+        lnum = line,
+        col = 0,
+        coladd = view.coladd,
+        curswant = view.curswant,
+        topline = view.topline,
+        topfill = view.topfill,
+        leftcol = view.leftcol,
+        skipcol = view.skipcol,
+    }
     vim.api.nvim_win_call(winid, function()
         pcall(vim.fn.winrestview, restore)
     end)
