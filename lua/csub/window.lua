@@ -45,4 +45,17 @@ function M.find_window_with_buf(bufnr)
     end
 end
 
+function M.close_if_buf(winid, bufnr)
+    if not (winid and bufnr) then
+        return
+    end
+    if not vim.api.nvim_win_is_valid(winid) then
+        return
+    end
+    local current = vim.api.nvim_win_get_buf(winid)
+    if current == bufnr then
+        pcall(vim.api.nvim_win_close, winid, true)
+    end
+end
+
 return M

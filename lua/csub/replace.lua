@@ -65,6 +65,8 @@ function M.apply(bufnr, winid)
     vim.cmd(string.format("%dbuffer", qf_bufnr))
     vim.fn.setqflist(qf_orig, "r")
 
+    window.close_if_buf(winid, bufnr)
+
     local qfwin = window.ensure_quickfix_window()
     if qfwin and vim.api.nvim_win_is_valid(qfwin) then
         vim.api.nvim_set_current_win(qfwin)
