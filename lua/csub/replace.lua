@@ -14,6 +14,10 @@ end
 function M.apply(bufnr, winid, qf_bufnr)
     local qf_orig = vim.b[bufnr].csub_orig_qflist or {}
     local new_text_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local desired_line = 1
+    if winid and vim.api.nvim_win_is_valid(winid) then
+        desired_line = vim.api.nvim_win_get_cursor(winid)[1]
+    end
 
     if #new_text_lines ~= #qf_orig then
         utils.echoerr(string.format("csub: Illegal edit: line number was changed from %d to %d.", #qf_orig,
@@ -74,8 +78,14 @@ function M.apply(bufnr, winid, qf_bufnr)
         vim.schedule(function()
             if target_win and vim.api.nvim_win_is_valid(target_win) and vim.api.nvim_buf_is_valid(target_qfbuf) then
                 window.use_buf(target_win, target_qfbuf)
+                local lc = vim.api.nvim_buf_line_count(target_qfbuf)
+                local l = math.max(1, math.min(desired_line, lc))
+                pcall(vim.api.nvim_win_set_cursor, target_win, { l, 0 })
             elseif qfwin and vim.api.nvim_win_is_valid(qfwin) and vim.api.nvim_buf_is_valid(target_qfbuf) then
                 window.use_buf(qfwin, target_qfbuf)
+                local lc = vim.api.nvim_buf_line_count(target_qfbuf)
+                local l = math.max(1, math.min(desired_line, lc))
+                pcall(vim.api.nvim_win_set_cursor, qfwin, { l, 0 })
             end
         end)
     end
