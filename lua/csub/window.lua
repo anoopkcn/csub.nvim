@@ -6,6 +6,14 @@ function M.apply_window_opts(winid)
     end
 end
 
+function M.is_quickfix_window(winid)
+    if not (winid and vim.api.nvim_win_is_valid(winid)) then
+        return false
+    end
+    local buf = vim.api.nvim_win_get_buf(winid)
+    return vim.bo[buf].buftype == "quickfix"
+end
+
 function M.find_quickfix_window()
     for _, win in ipairs(vim.fn.getwininfo()) do
         if win.quickfix == 1 then

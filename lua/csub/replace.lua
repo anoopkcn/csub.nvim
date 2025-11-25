@@ -19,7 +19,9 @@ local function save_current_buffer()
 end
 
 function M.apply(bufnr, winid, qf_bufnr)
-    local qf_orig = vim.b[bufnr].csub_orig_qflist or {}
+    local qf_stored = vim.b[bufnr].csub_orig_qflist or {}
+    -- Deep copy to avoid modifying the stored qflist
+    local qf_orig = vim.deepcopy(qf_stored)
     local new_text_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     local desired_line = 1
     if winid and vim.api.nvim_win_is_valid(winid) then

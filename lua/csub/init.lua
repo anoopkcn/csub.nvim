@@ -21,8 +21,9 @@ local function open_replace_window()
         return
     end
 
+    -- Only use stored window if it's still a valid quickfix window
     local target_win = state.qf_winid
-    if not (target_win and vim.api.nvim_win_is_valid(target_win)) then
+    if not window.is_quickfix_window(target_win) then
         target_win = window.ensure_quickfix_window()
     end
     if not target_win then

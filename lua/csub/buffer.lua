@@ -65,6 +65,11 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
         return
     end
 
+    -- Safety check: only allow csub buffer in quickfix windows
+    if not window.is_quickfix_window(winid) then
+        return
+    end
+
     -- First check if state has a valid csub buffer
     if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr) then
         local is_csub = vim.b[state.bufnr].csub_buffer
