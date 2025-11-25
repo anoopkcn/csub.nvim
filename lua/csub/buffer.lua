@@ -59,7 +59,7 @@ function M.populate(bufnr, qflist)
     vim.bo[bufnr].modified = false
 end
 
-function M.ensure_buffer(state, winid, on_write)
+function M.ensure_buffer(state, winid, qf_bufnr, on_write)
     if not (winid and vim.api.nvim_win_is_valid(winid)) then
         return
     end
@@ -86,7 +86,7 @@ function M.ensure_buffer(state, winid, on_write)
         buffer = bufnr,
         nested = true,
         callback = function()
-            on_write(bufnr, winid)
+            on_write(bufnr, winid, qf_bufnr)
         end,
     })
     vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {

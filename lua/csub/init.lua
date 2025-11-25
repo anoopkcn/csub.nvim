@@ -7,6 +7,8 @@ local M = {}
 
 local state = {
     bufnr = nil,
+    qf_bufnr = nil,
+    qf_winid = nil,
 }
 
 local function open_replace_window()
@@ -16,13 +18,23 @@ local function open_replace_window()
         return
     end
 
-    local target_win = window.find_window_with_buf(state.bufnr) or window.ensure_quickfix_window()
+    local target_win = nil
+    if state.qf_winid and vim.api.nvim_win_is_valid(state.qf_winid) then
+        target_win = state.qf_winid
+    else
+        target_win = window.ensure_quickfix_window()
+    end
     if not target_win then
         vim.notify("[csub] Unable to open quickfix window.", vim.log.levels.ERROR)
         return
     end
 
-    local bufnr = buffer.ensure_buffer(state, target_win, replace.apply)
+    state.qf_winid = target_win
+    if not (state.qf_bufnr and vim.api.nvim_buf_is_valid(state.qf_bufnr)) then
+        state.qf_bufnr = vim.api.nvim_win_get_buf(target_win)
+    end
+
+    local bufnr = buffer.ensure_buffer(state, target_win, state.qf_bufnr, replace.apply)
     if not bufnr then
         vim.notify("[csub] Unable to prepare csub buffer.", vim.log.levels.ERROR)
         return

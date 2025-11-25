@@ -58,4 +58,17 @@ function M.close_if_buf(winid, bufnr)
     end
 end
 
+function M.use_buf(winid, bufnr)
+    if not (winid and bufnr) then
+        return
+    end
+    if not (vim.api.nvim_win_is_valid(winid) and vim.api.nvim_buf_is_valid(bufnr)) then
+        return
+    end
+    if vim.api.nvim_win_get_buf(winid) ~= bufnr then
+        pcall(vim.api.nvim_win_set_buf, winid, bufnr)
+    end
+    pcall(vim.api.nvim_set_current_win, winid)
+end
+
 return M

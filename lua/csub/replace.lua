@@ -11,7 +11,7 @@ local function compute_after_cmd()
     return "update" .. (vim.v.cmdbang == 1 and "!" or "")
 end
 
-function M.apply(bufnr, winid)
+function M.apply(bufnr, winid, qf_bufnr)
     local qf_orig = vim.b[bufnr].csub_orig_qflist or {}
     local new_text_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 
@@ -25,7 +25,6 @@ function M.apply(bufnr, winid)
 
     local after_cmd = compute_after_cmd()
     local prev_bufnr = -1
-    local qf_bufnr = bufnr
 
     for i, entry in ipairs(qf_orig) do
         local new_text = new_text_lines[i]
@@ -65,11 +64,13 @@ function M.apply(bufnr, winid)
     vim.cmd(string.format("%dbuffer", qf_bufnr))
     vim.fn.setqflist(qf_orig, "r")
 
-    window.close_if_buf(winid, bufnr)
-
-    local qfwin = window.ensure_quickfix_window()
-    if qfwin and vim.api.nvim_win_is_valid(qfwin) then
-        vim.api.nvim_set_current_win(qfwin)
+    if winid and qf_bufnr then
+        window.use_buf(winid, qf_bufnr)
+    else
+        local qfwin = window.ensure_quickfix_window()
+        if qfwin and vim.api.nvim_win_is_valid(qfwin) then
+            vim.api.nvim_set_current_win(qfwin)
+        end
     end
 end
 
