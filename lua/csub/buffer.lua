@@ -28,7 +28,8 @@ local function on_changed(bufnr)
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     local previous = vim.b[bufnr].csub_lines or lines
 
-    if #lines ~= target then
+    -- Allow deletions (fewer lines), but not additions (more lines)
+    if #lines > target then
         vim.schedule(function()
             if not vim.api.nvim_buf_is_valid(bufnr) then
                 return
@@ -36,7 +37,7 @@ local function on_changed(bufnr)
             vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, previous)
             set_metadata(bufnr, qf_entries)
             utils.silence_modified(bufnr)
-            vim.notify("[csub] Line count must remain unchanged.", vim.log.levels.WARN)
+            vim.notify("[csub] Cannot add lines beyond quickfix entries.", vim.log.levels.WARN)
         end)
         return
     end

@@ -21,8 +21,9 @@ function M.apply(bufnr, winid, qf_bufnr)
     end
     local saved_view = view.save(winid, bufnr)
 
-    if #new_text_lines ~= #qf_orig then
-        utils.echoerr(string.format("csub: Illegal edit: line number was changed from %d to %d.", #qf_orig,
+    -- Allow deletions (fewer lines), but not additions (more lines)
+    if #new_text_lines > #qf_orig then
+        utils.echoerr(string.format("csub: Cannot add lines beyond quickfix entries (quickfix: %d, buffer: %d).", #qf_orig,
             #new_text_lines))
         return
     end
@@ -33,6 +34,12 @@ function M.apply(bufnr, winid, qf_bufnr)
     local prev_bufnr = -1
 
     for i, entry in ipairs(qf_orig) do
+        -- If line was deleted (beyond the new buffer's line count), mark for removal
+        if i > #new_text_lines then
+            entry._csub_deleted = true
+            goto continue
+        end
+
         local new_text = new_text_lines[i]
         if entry.text == new_text then
             goto continue
@@ -68,7 +75,12 @@ function M.apply(bufnr, winid, qf_bufnr)
 
     vim.cmd(after_cmd)
     vim.cmd(string.format("%dbuffer", qf_bufnr))
-    vim.fn.setqflist(qf_orig, "r")
+
+    -- Filter out deleted entries before updating the quickfix list
+    local filtered_qf = vim.tbl_filter(function(e)
+        return not e._csub_deleted
+    end, qf_orig)
+    vim.fn.setqflist(filtered_qf, "r")
 
     local qf_info = vim.fn.getqflist({ qfbufnr = 0 })
     local target_qfbuf = qf_info and qf_info.qfbufnr or qf_bufnr
