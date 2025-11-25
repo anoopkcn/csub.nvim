@@ -53,6 +53,13 @@ end
 function M.start()
     local current_buf = vim.api.nvim_get_current_buf()
     if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr) and current_buf == state.bufnr then
+        local current_line = vim.api.nvim_win_get_cursor(0)[1]
+        state.qf_cursor = current_line
+        local new_view = state.qf_view or {}
+        new_view.lnum = current_line
+        state.qf_view = new_view
+        vim.b[state.bufnr].csub_qf_view = new_view
+
         local current_qflist = vim.fn.getqflist()
         if current_qflist and not vim.tbl_isempty(current_qflist) then
             buffer.populate(state.bufnr, current_qflist)
