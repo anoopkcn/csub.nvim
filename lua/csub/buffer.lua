@@ -65,11 +65,21 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
         return
     end
 
-    -- First check if state has a valid buffer
+    -- First check if state has a valid csub buffer
+    if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr) then
+        local is_csub = vim.b[state.bufnr].csub_buffer
+        if not is_csub then
+            state.bufnr = nil
+        end
+    end
+
+    -- If state doesn't have a valid buffer, search for existing csub buffer
     if not (state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr)) then
-        local existing = vim.fn.bufnr("[csub]")
-        if existing ~= -1 and vim.api.nvim_buf_is_valid(existing) then
-            state.bufnr = existing
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+            if vim.api.nvim_buf_is_valid(buf) and vim.b[buf].csub_buffer then
+                state.bufnr = buf
+                break
+            end
         end
     end
 
@@ -87,11 +97,16 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
     -- Create a new buffer only if no existing buffer found
     bufnr = vim.api.nvim_create_buf(false, false)
     state.bufnr = bufnr
-    vim.api.nvim_buf_set_name(bufnr, "[csub]")
+
+    -- Set buftype FIRST to prevent file association
+    vim.bo[bufnr].buftype = "acwrite"
     vim.bo[bufnr].swapfile = false
     vim.bo[bufnr].bufhidden = "hide"
-    vim.bo[bufnr].buftype = "acwrite"
     vim.bo[bufnr].filetype = "csub"
+    vim.api.nvim_buf_set_name(bufnr, "[csub]")
+
+    -- Mark this as a csub buffer for reliable identification
+    vim.b[bufnr].csub_buffer = true
 
     -- Display the new buffer in the target window
     window.use_buf(winid, bufnr)

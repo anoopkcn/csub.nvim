@@ -79,7 +79,7 @@ function M.start()
             end
         end
 
-        state.bufnr = nil
+        -- Keep state.bufnr so we can reuse the buffer next time
         return
     end
 
