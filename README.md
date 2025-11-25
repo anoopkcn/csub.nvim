@@ -12,8 +12,7 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 - Opens the quickfix list in an editable buffer (`[csub]`, `filetype=csub`)
 - Shows file/line/col metadata as virtual text beside each entry
 - Protects the line count to keep quickfix entries aligned
-- Warns if target lines changed since the quickfix list was built
-- One command to open; optional bang closes quickfix/location list windows after opening
+- Run `:Csub` switch bakc and forth between the quickfix list and the csub buffer
 
 ## Installation
 
@@ -48,6 +47,8 @@ use({
 2. Run `:Csub` to open the list in the existing quickfix window for editing.
 3. Edit the lines directly; keep the line count unchanged.
 4. Write (`:w`) to apply changes back to the underlying files and quickfix list; the view jumps back to the quickfix list.
+
+**NOTE: closing the csub buffer without writing discards all changes.**
 
 Useful keymap:
 ```lua
