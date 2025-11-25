@@ -4,12 +4,18 @@ local window = require("csub.window")
 
 local M = {}
 
-local function compute_after_cmd()
+local function save_current_buffer()
     local no_save = vim.g.csub_no_save or vim.g.csubstitute_no_save or 0
     if vim.o.hidden and no_save ~= 0 then
-        return "if &modified | setlocal buflisted | endif"
+        if vim.bo.modified then
+            vim.bo.buflisted = true
+        end
+    else
+        local bang = vim.v.cmdbang == 1
+        if vim.bo.modified then
+            vim.cmd.update({ bang = bang })
+        end
     end
-    return "update" .. (vim.v.cmdbang == 1 and "!" or "")
 end
 
 function M.apply(bufnr, winid, qf_bufnr)
@@ -23,14 +29,14 @@ function M.apply(bufnr, winid, qf_bufnr)
 
     -- Allow deletions (fewer lines), but not additions (more lines)
     if #new_text_lines > #qf_orig then
-        utils.echoerr(string.format("csub: Cannot add lines beyond quickfix entries (quickfix: %d, buffer: %d).", #qf_orig,
+        utils.echoerr(string.format("csub: Cannot add lines beyond quickfix entries (quickfix: %d, buffer: %d).",
+            #qf_orig,
             #new_text_lines))
         return
     end
 
     vim.bo[bufnr].modified = false
 
-    local after_cmd = compute_after_cmd()
     local prev_bufnr = -1
 
     for i, entry in ipairs(qf_orig) do
@@ -52,9 +58,9 @@ function M.apply(bufnr, winid, qf_bufnr)
 
         if prev_bufnr ~= entry.bufnr then
             if prev_bufnr ~= -1 then
-                vim.cmd(after_cmd)
+                save_current_buffer()
             end
-            vim.cmd(string.format("%dbuffer", entry.bufnr))
+            vim.api.nvim_set_current_buf(entry.bufnr)
         end
 
         local current_line = (vim.api.nvim_buf_get_lines(entry.bufnr, entry.lnum - 1, entry.lnum, false)[1]) or ""
@@ -73,8 +79,8 @@ function M.apply(bufnr, winid, qf_bufnr)
         ::continue::
     end
 
-    vim.cmd(after_cmd)
-    vim.cmd(string.format("%dbuffer", qf_bufnr))
+    save_current_buffer()
+    vim.api.nvim_set_current_buf(qf_bufnr)
 
     -- Filter out deleted entries before updating the quickfix list
     local filtered_qf = vim.tbl_filter(function(e)
