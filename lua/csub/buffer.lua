@@ -84,6 +84,12 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
     end
 
     vim.api.nvim_set_current_win(winid)
+
+    local old_csub = vim.fn.bufnr("[csub]")
+    if old_csub ~= -1 and vim.api.nvim_buf_is_valid(old_csub) then
+        vim.api.nvim_buf_delete(old_csub, { force = true })
+    end
+
     vim.cmd("enew")
     bufnr = vim.api.nvim_get_current_buf()
     state.bufnr = bufnr
@@ -91,9 +97,7 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
     vim.bo[bufnr].bufhidden = "hide"
     vim.bo[bufnr].buftype = "acwrite"
     vim.bo[bufnr].filetype = "csub"
-    if vim.api.nvim_buf_get_name(bufnr) == "" then
-        vim.api.nvim_buf_set_name(bufnr, "[csub]")
-    end
+    vim.api.nvim_buf_set_name(bufnr, "[csub]")
     vim.b[bufnr].csub_qf_bufnr = qf_bufnr
     vim.b[bufnr].csub_qf_winid = winid
     vim.api.nvim_create_autocmd("BufWriteCmd", {
