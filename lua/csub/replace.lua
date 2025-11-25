@@ -48,7 +48,7 @@ function M.apply(bufnr, winid, qf_bufnr)
         local original_text = utils.chomp(entry.text)
         if current_line ~= original_text then
             if current_line ~= new_text then
-                utils.echoerr(string.format("csub: Original text has changed: %s:%d", vim.fn.bufname(entry.bufnr),
+                utils.echoerr(string.format("csub: text can't be changed: %s:%d", vim.fn.bufname(entry.bufnr),
                     entry.lnum))
             end
         else
