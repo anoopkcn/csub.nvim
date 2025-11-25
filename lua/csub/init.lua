@@ -1,6 +1,7 @@
 local buffer = require("csub.buffer")
 local fmt = require("csub.format")
 local replace = require("csub.replace")
+local view = require("csub.view")
 local window = require("csub.window")
 
 local M = {}
@@ -12,18 +13,6 @@ local state = {
     qf_cursor = 1,
     qf_view = nil,
 }
-
-local function set_cursor_safe(winid, bufnr, line)
-    if not (winid and bufnr and line) then
-        return
-    end
-    if not (vim.api.nvim_win_is_valid(winid) and vim.api.nvim_buf_is_valid(bufnr)) then
-        return
-    end
-    local line_count = vim.api.nvim_buf_line_count(bufnr)
-    local l = math.max(1, math.min(line, line_count))
-    pcall(vim.api.nvim_win_set_cursor, winid, { l, 0 })
-end
 
 local function open_replace_window()
     local current_qflist = vim.fn.getqflist()
@@ -43,10 +32,10 @@ local function open_replace_window()
 
     state.qf_winid = target_win
     state.qf_bufnr = vim.api.nvim_win_get_buf(target_win)
-    local view = vim.fn.winsaveview()
-    local cursor_line = view.lnum or vim.api.nvim_win_get_cursor(target_win)[1]
+    local qf_view = view.save(target_win, state.qf_bufnr)
+    local cursor_line = (qf_view and qf_view.lnum) or vim.api.nvim_win_get_cursor(target_win)[1]
     state.qf_cursor = cursor_line
-    state.qf_view = view
+    state.qf_view = qf_view
 
     local bufnr = buffer.ensure_buffer(state, target_win, state.qf_bufnr, replace.apply)
     if not bufnr then
@@ -54,16 +43,11 @@ local function open_replace_window()
         return
     end
 
-    vim.b[bufnr].csub_qf_view = view
+    vim.b[bufnr].csub_qf_view = qf_view
 
     buffer.populate(bufnr, current_qflist)
     window.apply_window_opts(target_win)
-    set_cursor_safe(target_win, bufnr, cursor_line)
-    if view then
-        local restore = vim.deepcopy(view)
-        restore.lnum = cursor_line
-        pcall(vim.fn.winrestview, restore)
-    end
+    view.restore(target_win, bufnr, qf_view, cursor_line)
 end
 
 function M.start()
@@ -79,22 +63,12 @@ function M.start()
 
         if qfbuf and vim.api.nvim_buf_is_valid(qfbuf) then
             window.use_buf(vim.api.nvim_get_current_win(), qfbuf)
-            set_cursor_safe(vim.api.nvim_get_current_win(), qfbuf, state.qf_cursor)
-            if state.qf_view then
-                local restore = vim.deepcopy(state.qf_view)
-                restore.lnum = state.qf_cursor
-                pcall(vim.fn.winrestview, restore)
-            end
+            view.restore(vim.api.nvim_get_current_win(), qfbuf, state.qf_view, state.qf_cursor)
         else
             local qfwin = window.ensure_quickfix_window()
             if qfwin and vim.api.nvim_win_is_valid(qfwin) then
                 vim.api.nvim_set_current_win(qfwin)
-                set_cursor_safe(qfwin, vim.api.nvim_win_get_buf(qfwin), state.qf_cursor)
-                if state.qf_view then
-                    local restore = vim.deepcopy(state.qf_view)
-                    restore.lnum = state.qf_cursor
-                    pcall(vim.fn.winrestview, restore)
-                end
+                view.restore(qfwin, vim.api.nvim_win_get_buf(qfwin), state.qf_view, state.qf_cursor)
             end
         end
 
