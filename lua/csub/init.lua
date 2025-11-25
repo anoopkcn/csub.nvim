@@ -94,15 +94,10 @@ end
 function M.setup()
     vim.o.quickfixtextfunc = "v:lua.require'csub'.quickfix_text"
 
-    if vim.fn.hlexists("CsubSeparator") == 0 then
-        pcall(vim.api.nvim_set_hl, 0, "CsubSeparator", { link = "Comment" })
-    end
-    if vim.fn.hlexists("CsubMetaFileName") == 0 then
-        pcall(vim.api.nvim_set_hl, 0, "CsubMetaFileName", { link = "Comment" })
-    end
-    if vim.fn.hlexists("CsubMetaNumber") == 0 then
-        pcall(vim.api.nvim_set_hl, 0, "CsubMetaNumber", { link = "Number" })
-    end
+    -- default=true only sets the highlight if it doesn't already exist
+    vim.api.nvim_set_hl(0, "CsubSeparator", { link = "Comment", default = true })
+    vim.api.nvim_set_hl(0, "CsubMetaFileName", { link = "Comment", default = true })
+    vim.api.nvim_set_hl(0, "CsubMetaNumber", { link = "Number", default = true })
 
     -- Set nowrap for quickfix and csub windows
     vim.api.nvim_create_autocmd("FileType", {
