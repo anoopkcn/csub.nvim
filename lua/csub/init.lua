@@ -18,10 +18,8 @@ local function open_replace_window()
         return
     end
 
-    local target_win = nil
-    if state.qf_winid and vim.api.nvim_win_is_valid(state.qf_winid) then
-        target_win = state.qf_winid
-    else
+    local target_win = state.qf_winid
+    if not (target_win and vim.api.nvim_win_is_valid(target_win)) then
         target_win = window.ensure_quickfix_window()
     end
     if not target_win then
@@ -30,9 +28,7 @@ local function open_replace_window()
     end
 
     state.qf_winid = target_win
-    if not (state.qf_bufnr and vim.api.nvim_buf_is_valid(state.qf_bufnr)) then
-        state.qf_bufnr = vim.api.nvim_win_get_buf(target_win)
-    end
+    state.qf_bufnr = vim.api.nvim_win_get_buf(target_win)
 
     local bufnr = buffer.ensure_buffer(state, target_win, state.qf_bufnr, replace.apply)
     if not bufnr then

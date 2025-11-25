@@ -67,6 +67,8 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
     local bufnr = state.bufnr
 
     if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+        vim.b[bufnr].csub_qf_bufnr = qf_bufnr
+        vim.b[bufnr].csub_qf_winid = winid
         vim.api.nvim_set_current_win(winid)
         vim.api.nvim_set_current_buf(bufnr)
         window.apply_window_opts(winid)
@@ -82,11 +84,13 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
     vim.bo[bufnr].buftype = "acwrite"
     vim.bo[bufnr].filetype = "csub"
     vim.api.nvim_buf_set_name(bufnr, "[csub]")
+    vim.b[bufnr].csub_qf_bufnr = qf_bufnr
+    vim.b[bufnr].csub_qf_winid = winid
     vim.api.nvim_create_autocmd("BufWriteCmd", {
         buffer = bufnr,
         nested = true,
         callback = function()
-            on_write(bufnr, winid, qf_bufnr)
+            on_write(bufnr, vim.b[bufnr].csub_qf_winid, vim.b[bufnr].csub_qf_bufnr)
         end,
     })
     vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
