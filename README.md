@@ -12,7 +12,7 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 ## Features
 - Opens the quickfix list in an editable buffer (`[csub]`, `filetype=csub`)
 - Shows file/line/col metadata as virtual text beside each entry
-- Protects the line count to keep quickfix entries aligned
+- Applies changes to the underlying files and quickfix list on write
 - Run `:Csub` switch back and forth between the quickfix list and the csub buffer
 
 ## Installation
