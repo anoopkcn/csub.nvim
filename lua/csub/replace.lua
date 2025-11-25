@@ -1,4 +1,5 @@
 local utils = require("csub.utils")
+local window = require("csub.window")
 
 local M = {}
 
@@ -10,7 +11,7 @@ local function compute_after_cmd()
     return "update" .. (vim.v.cmdbang == 1 and "!" or "")
 end
 
-function M.apply(bufnr)
+function M.apply(bufnr, winid)
     local qf_orig = vim.b[bufnr].csub_orig_qflist or {}
     local new_text_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 
@@ -63,6 +64,11 @@ function M.apply(bufnr)
     vim.cmd(after_cmd)
     vim.cmd(string.format("%dbuffer", qf_bufnr))
     vim.fn.setqflist(qf_orig, "r")
+
+    local qfwin = window.ensure_quickfix_window()
+    if qfwin and vim.api.nvim_win_is_valid(qfwin) then
+        vim.api.nvim_set_current_win(qfwin)
+    end
 end
 
 return M

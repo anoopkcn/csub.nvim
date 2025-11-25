@@ -59,24 +59,21 @@ function M.populate(bufnr, qflist)
     vim.bo[bufnr].modified = false
 end
 
-function M.ensure_buffer(state, open_cmd, on_write)
+function M.ensure_buffer(state, winid, on_write)
+    if not (winid and vim.api.nvim_win_is_valid(winid)) then
+        return
+    end
+
     local bufnr = state.bufnr
-    local cmd = (open_cmd and open_cmd ~= "") and open_cmd or "new"
 
     if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
-        local wins = vim.fn.win_findbuf(bufnr)
-        if wins[1] then
-            vim.api.nvim_set_current_win(wins[1])
-            window.apply_window_opts(wins[1])
-        else
-            vim.cmd(cmd)
-            vim.api.nvim_set_current_buf(bufnr)
-            window.apply_window_opts(vim.api.nvim_get_current_win())
-        end
+        vim.api.nvim_set_current_win(winid)
+        vim.api.nvim_set_current_buf(bufnr)
+        window.apply_window_opts(winid)
         return bufnr
     end
 
-    vim.cmd(cmd)
+    vim.api.nvim_set_current_win(winid)
     vim.cmd("enew")
     bufnr = vim.api.nvim_get_current_buf()
     state.bufnr = bufnr
@@ -89,7 +86,7 @@ function M.ensure_buffer(state, open_cmd, on_write)
         buffer = bufnr,
         nested = true,
         callback = function()
-            on_write(bufnr)
+            on_write(bufnr, winid)
         end,
     })
     vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {

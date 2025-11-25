@@ -25,20 +25,19 @@ This registers the `quickfixtextfunc` and the `:Csub` command.
 USAGE                                                              *csub-usage*
 
 - Populate a quickfix list (e.g. via `:make`, `:grep`, `:vim.diagnostic.setqflist`).
-- Run `:Csub[!]` to open the editable buffer for the current quickfix list.
-  - An optional command argument controls how the window opens (e.g. `:Csub vnew`).
-  - Use `:Csub!` to open and close existing quickfix/location list windows.
+- Run `:Csub` to open the editable buffer for the current quickfix list in the
+  quickfix window.
 - Edit the lines directly. Line count must stay unchanged; attempts to add or
   remove lines are reverted with a warning.
-- Write (`:w`) to apply changes back to the underlying files/quickfix entries.
+- Write (`:w`) to apply changes back to the underlying files/quickfix entries;
+  the quickfix window is shown again after writing.
 
 ==============================================================================
 COMMANDS                                                        *csub-commands*
 
-:Csub[!] [cmd]                                                     *:Csub*
-    Open the quickfix list in an editable buffer. If {cmd} is given, it is
-    used to create the window (e.g. `new`, `vnew`, `tabnew`). With [!], close
-    existing quickfix/location list windows after opening the buffer.
+:Csub                                                              *:Csub*
+    Open the current quickfix list in an editable buffer using the quickfix
+    window.
 
 ==============================================================================
 OPTIONS                                                          *csub-options*

@@ -14,4 +14,35 @@ function M.close_list_windows()
     end
 end
 
+function M.find_quickfix_window()
+    for _, win in ipairs(vim.fn.getwininfo()) do
+        if win.quickfix == 1 then
+            return win.winid
+        end
+    end
+end
+
+function M.ensure_quickfix_window()
+    local winid = M.find_quickfix_window()
+    if winid and vim.api.nvim_win_is_valid(winid) then
+        return winid
+    end
+
+    pcall(vim.cmd, "copen")
+    winid = M.find_quickfix_window()
+    if winid and vim.api.nvim_win_is_valid(winid) then
+        return winid
+    end
+end
+
+function M.find_window_with_buf(bufnr)
+    if not (bufnr and vim.api.nvim_buf_is_valid(bufnr)) then
+        return
+    end
+    local wins = vim.fn.win_findbuf(bufnr)
+    if wins and wins[1] and vim.api.nvim_win_is_valid(wins[1]) then
+        return wins[1]
+    end
+end
+
 return M

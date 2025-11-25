@@ -45,15 +45,13 @@ use({
 
 ## Usage
 1. Populate a quickfix list (e.g. `:make`, `:grep`, diagnostics).
-2. Run `:Csub[!] [cmd]`.
-   - `[cmd]` controls window creation (`new`, `vnew`, `tabnew`, ...).
-   - `!` closes existing quickfix/location list windows after opening the buffer.
+2. Run `:Csub` to open the list in the existing quickfix window for editing.
 3. Edit the lines directly; keep the line count unchanged.
-4. Write (`:w`) to apply changes back to the underlying files and quickfix list.
+4. Write (`:w`) to apply changes back to the underlying files and quickfix list; the view jumps back to the quickfix list.
 
 Useful keymap:
 ```lua
-vim.keymap.set("n", "<leader>s", "<cmd>Csub!<cr>", { desc = "Csub the current quickfix" })
+vim.keymap.set("n", "<leader>s", "<cmd>Csub<cr>", { desc = "Csub the current quickfix" })
 ```
 
 ## Options
