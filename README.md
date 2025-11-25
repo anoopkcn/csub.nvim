@@ -14,6 +14,9 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 - Edit the `Csub` buffer as if you would any other buffer and all changes will be applied when you write the buffer.
 - Saving(`:w`) the Csub buffer will switch back to the updated quickfix list.
 
+## Requirements
+- Neovim 0.12 or higher
+
 ## Installation
 
 vim.pack example (Neovim 0.12+):
