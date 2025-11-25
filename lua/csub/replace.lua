@@ -19,7 +19,7 @@ function M.apply(bufnr, winid, qf_bufnr)
     if winid and vim.api.nvim_win_is_valid(winid) then
         desired_line = vim.api.nvim_win_get_cursor(winid)[1]
     end
-    local saved_view = vim.b[bufnr].csub_qf_view or view.save(winid, qf_bufnr)
+    local saved_view = view.save(winid, bufnr)
 
     if #new_text_lines ~= #qf_orig then
         utils.echoerr(string.format("csub: Illegal edit: line number was changed from %d to %d.", #qf_orig,

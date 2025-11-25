@@ -55,7 +55,7 @@ function M.start()
     if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr) and current_buf == state.bufnr then
         local current_line = vim.api.nvim_win_get_cursor(0)[1]
         state.qf_cursor = current_line
-        local new_view = state.qf_view or {}
+        local new_view = view.save(vim.api.nvim_get_current_win(), state.bufnr) or state.qf_view or {}
         new_view.lnum = current_line
         state.qf_view = new_view
         vim.b[state.bufnr].csub_qf_view = new_view
