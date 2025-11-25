@@ -5,14 +5,32 @@ M.META_WIDTH = 50
 local function normalize_name(entry)
     local name = ""
     if entry.bufnr and entry.bufnr ~= 0 then
-        name = vim.fn.bufname(entry.bufnr)
+        name = vim.api.nvim_buf_get_name(entry.bufnr)
     elseif entry.filename then
         name = entry.filename
     end
     if name == "" then
         name = "[No Name]"
     end
-    return vim.fn.fnamemodify(name, ":.")
+    -- Make path relative to cwd
+    local cwd = vim.uv.cwd() or ""
+    if cwd ~= "" and name:sub(1, #cwd) == cwd then
+        name = name:sub(#cwd + 2) -- +2 to skip the trailing slash
+    end
+    return name
+end
+
+local function truncate_path(path, max_width)
+    if #path <= max_width then
+        return path
+    end
+    -- First try shortening path components (e.g., /foo/bar/baz -> /f/b/baz)
+    local short = vim.fn.pathshorten(path)
+    if #short <= max_width then
+        return short
+    end
+    -- If still too long, truncate from left (keep the end)
+    return short:sub(-max_width)
 end
 
 function M.format_meta(entry, opts)
@@ -23,13 +41,7 @@ function M.format_meta(entry, opts)
     local suffix = string.format("|%5d:%-4d| ", lnum, col)
     local name_width = math.max(width - #suffix, 1)
 
-    local display_name = name
-    if #display_name > name_width then
-        display_name = vim.fn.pathshorten(display_name)
-    end
-    if #display_name > name_width then
-        display_name = vim.fn.strcharpart(display_name, #display_name - name_width, name_width)
-    end
+    local display_name = truncate_path(name, name_width)
 
     return string.format("%-" .. name_width .. "s%s", display_name, suffix)
 end
@@ -43,15 +55,9 @@ function M.format_meta_chunks(entry, opts)
     local decorated_suffix_width = #suffix + 3 -- two pipes plus trailing space
     local name_width = math.max(width - decorated_suffix_width, 1)
 
-    local display_name = name
-    if #display_name > name_width then
-        display_name = vim.fn.pathshorten(display_name)
-    end
-    if #display_name > name_width then
-        display_name = vim.fn.strcharpart(display_name, #display_name - name_width, name_width)
-    end
-
+    local display_name = truncate_path(name, name_width)
     local padded_name = string.format("%-" .. name_width .. "s", display_name)
+
     return {
         { padded_name, "CsubMetaFileName" },
         { "|", "CsubSeparator" },
