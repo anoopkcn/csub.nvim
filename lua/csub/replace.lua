@@ -70,10 +70,14 @@ function M.apply(bufnr, winid, qf_bufnr)
     local target_win = window.find_window_with_buf(bufnr) or winid
     local qfwin = window.find_quickfix_window() or window.ensure_quickfix_window()
 
-    if target_win and target_qfbuf then
-        window.use_buf(target_win, target_qfbuf)
-    elseif qfwin and target_qfbuf then
-        window.use_buf(qfwin, target_qfbuf)
+    if target_qfbuf then
+        vim.schedule(function()
+            if target_win and vim.api.nvim_win_is_valid(target_win) and vim.api.nvim_buf_is_valid(target_qfbuf) then
+                window.use_buf(target_win, target_qfbuf)
+            elseif qfwin and vim.api.nvim_win_is_valid(qfwin) and vim.api.nvim_buf_is_valid(target_qfbuf) then
+                window.use_buf(qfwin, target_qfbuf)
+            end
+        end)
     end
 end
 
