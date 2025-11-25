@@ -72,8 +72,6 @@ function M.quickfix_text(info)
         return {}
     end
 
-    vim.cmd("setlocal nowrap")
-
     local lines = {}
     for i = info.start_idx, info.end_idx do
         local e = items[i]

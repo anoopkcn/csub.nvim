@@ -103,6 +103,14 @@ function M.setup()
         pcall(vim.api.nvim_set_hl, 0, "CsubMetaNumber", { link = "Number" })
     end
 
+    -- Set nowrap for quickfix and csub windows
+    vim.api.nvim_create_autocmd("FileType", {
+        pattern = { "qf", "csub" },
+        callback = function()
+            vim.wo.wrap = false
+        end,
+    })
+
     vim.api.nvim_create_user_command("Csub", function()
         M.start()
     end, { nargs = 0 })
