@@ -6,14 +6,6 @@ function M.apply_window_opts(winid)
     end
 end
 
-function M.close_list_windows()
-    for _, win in ipairs(vim.fn.getwininfo()) do
-        if win.quickfix == 1 then
-            pcall(vim.api.nvim_win_close, win.winid, false)
-        end
-    end
-end
-
 function M.find_quickfix_window()
     for _, win in ipairs(vim.fn.getwininfo()) do
         if win.quickfix == 1 then
@@ -42,19 +34,6 @@ function M.find_window_with_buf(bufnr)
     local wins = vim.fn.win_findbuf(bufnr)
     if wins and wins[1] and vim.api.nvim_win_is_valid(wins[1]) then
         return wins[1]
-    end
-end
-
-function M.close_if_buf(winid, bufnr)
-    if not (winid and bufnr) then
-        return
-    end
-    if not vim.api.nvim_win_is_valid(winid) then
-        return
-    end
-    local current = vim.api.nvim_win_get_buf(winid)
-    if current == bufnr then
-        pcall(vim.api.nvim_win_close, winid, true)
     end
 end
 
