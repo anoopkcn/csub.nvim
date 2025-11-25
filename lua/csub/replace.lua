@@ -64,18 +64,16 @@ function M.apply(bufnr, winid, qf_bufnr)
     vim.cmd(string.format("%dbuffer", qf_bufnr))
     vim.fn.setqflist(qf_orig, "r")
 
-    local target_win = window.find_window_with_buf(bufnr) or winid
-    local fallback_qfwin = window.ensure_quickfix_window()
-    local target_qfbuf = qf_bufnr
+    local qf_info = vim.fn.getqflist({ qfbufnr = 0 })
+    local target_qfbuf = qf_info and qf_info.qfbufnr or qf_bufnr
 
-    if not (target_qfbuf and vim.api.nvim_buf_is_valid(target_qfbuf)) and fallback_qfwin then
-        target_qfbuf = vim.api.nvim_win_get_buf(fallback_qfwin)
-    end
+    local target_win = window.find_window_with_buf(bufnr) or winid
+    local qfwin = window.find_quickfix_window() or window.ensure_quickfix_window()
 
     if target_win and target_qfbuf then
         window.use_buf(target_win, target_qfbuf)
-    elseif fallback_qfwin and target_qfbuf then
-        window.use_buf(fallback_qfwin, target_qfbuf)
+    elseif qfwin and target_qfbuf then
+        window.use_buf(qfwin, target_qfbuf)
     end
 end
 
