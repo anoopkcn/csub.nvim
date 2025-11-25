@@ -5,7 +5,7 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 **Example use cases:**
 
 - Use as a replacement for `:cfdo` and `:cdo`(Find and replace across multiple files)
-    - Unlike `:cfdo` or `:cdo`, you can see all changes in context before applying them. 
+    - Unlike `:cfdo` or `:cdo`, you can see all changes and make arbitrary changes in context before applying them. 
 - Edit the `Csub` buffer as if you would any other buffer and all changes will be applied when you write the buffer.
 - Writing the Csub buffer will switch from the Csub buffer back to the quickfix list.
 
