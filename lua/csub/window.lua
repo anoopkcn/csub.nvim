@@ -15,33 +15,31 @@ function M.is_quickfix_window(winid)
 end
 
 function M.find_quickfix_window()
-    for _, win in ipairs(vim.fn.getwininfo()) do
-        if win.quickfix == 1 then
-            return win.winid
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+        if M.is_quickfix_window(win) then
+            return win
         end
     end
 end
 
 function M.ensure_quickfix_window()
     local winid = M.find_quickfix_window()
-    if winid and vim.api.nvim_win_is_valid(winid) then
+    if winid then
         return winid
     end
 
-    pcall(vim.cmd, "copen")
-    winid = M.find_quickfix_window()
-    if winid and vim.api.nvim_win_is_valid(winid) then
-        return winid
-    end
+    pcall(vim.cmd.copen)
+    return M.find_quickfix_window()
 end
 
 function M.find_window_with_buf(bufnr)
     if not (bufnr and vim.api.nvim_buf_is_valid(bufnr)) then
         return
     end
-    local wins = vim.fn.win_findbuf(bufnr)
-    if wins and wins[1] and vim.api.nvim_win_is_valid(wins[1]) then
-        return wins[1]
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == bufnr then
+            return win
+        end
     end
 end
 
