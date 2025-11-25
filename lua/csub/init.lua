@@ -51,6 +51,16 @@ end
 function M.setup()
     vim.o.quickfixtextfunc = "v:lua.require'csub'.quickfix_text"
 
+    if vim.fn.hlexists("CsubSeparator") == 0 then
+        pcall(vim.api.nvim_set_hl, 0, "CsubSeparator", { link = "Comment" })
+    end
+    if vim.fn.hlexists("CsubMetaFileName") == 0 then
+        pcall(vim.api.nvim_set_hl, 0, "CsubMetaFileName", { link = "Comment" })
+    end
+    if vim.fn.hlexists("CsubMetaNumber") == 0 then
+        pcall(vim.api.nvim_set_hl, 0, "CsubMetaNumber", { link = "Number" })
+    end
+
     vim.api.nvim_create_user_command("Csub", function()
         M.start()
     end, { nargs = 0 })

@@ -13,9 +13,9 @@ local function set_metadata(bufnr, qf_entries)
         if idx > line_count then
             break
         end
-        local meta = fmt.format_meta(entry, { width = fmt.META_WIDTH })
+        local meta = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH })
         vim.api.nvim_buf_set_extmark(bufnr, ns, idx - 1, 0, {
-            virt_text = { { meta, "Comment" } },
+            virt_text = meta,
             virt_text_pos = "inline",
             hl_mode = "combine",
         })

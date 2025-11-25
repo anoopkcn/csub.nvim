@@ -34,6 +34,33 @@ function M.format_meta(entry, opts)
     return string.format("%-" .. name_width .. "s%s", display_name, suffix)
 end
 
+function M.format_meta_chunks(entry, opts)
+    local width = (opts and opts.width) or M.META_WIDTH
+    local name = normalize_name(entry)
+    local lnum = entry.lnum or 0
+    local col = entry.col or 0
+    local suffix = string.format("%5d:%-4d", lnum, col)
+    local decorated_suffix_width = #suffix + 3 -- two pipes plus trailing space
+    local name_width = math.max(width - decorated_suffix_width, 1)
+
+    local display_name = name
+    if #display_name > name_width then
+        display_name = vim.fn.pathshorten(display_name)
+    end
+    if #display_name > name_width then
+        display_name = vim.fn.strcharpart(display_name, #display_name - name_width, name_width)
+    end
+
+    local padded_name = string.format("%-" .. name_width .. "s", display_name)
+    return {
+        { padded_name, "CsubMetaFileName" },
+        { "|", "CsubSeparator" },
+        { suffix, "CsubMetaNumber" },
+        { "|", "CsubSeparator" },
+        { " ", "CsubMetaFileName" },
+    }
+end
+
 function M.quickfix_text(info)
     local items
     if info.quickfix == 1 then
