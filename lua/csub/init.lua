@@ -41,6 +41,29 @@ local function open_replace_window()
 end
 
 function M.start()
+    local current_buf = vim.api.nvim_get_current_buf()
+    if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr) and current_buf == state.bufnr then
+        local current_qflist = vim.fn.getqflist()
+        if current_qflist and not vim.tbl_isempty(current_qflist) then
+            buffer.populate(state.bufnr, current_qflist)
+        end
+
+        local qf_info = vim.fn.getqflist({ qfbufnr = 0 }) or {}
+        local qfbuf = (qf_info.qfbufnr and qf_info.qfbufnr ~= 0) and qf_info.qfbufnr or state.qf_bufnr
+
+        if qfbuf and vim.api.nvim_buf_is_valid(qfbuf) then
+            window.use_buf(vim.api.nvim_get_current_win(), qfbuf)
+        else
+            local qfwin = window.ensure_quickfix_window()
+            if qfwin and vim.api.nvim_win_is_valid(qfwin) then
+                vim.api.nvim_set_current_win(qfwin)
+            end
+        end
+
+        state.bufnr = nil
+        return
+    end
+
     open_replace_window()
 end
 
