@@ -19,7 +19,7 @@ function M.silence_modified(bufnr)
 end
 
 function M.echoerr(msg)
-    vim.api.nvim_echo({ { msg, "ErrorMsg" } }, true, {})
+    vim.notify(msg, vim.log.levels.ERROR)
 end
 
 return M
