@@ -18,6 +18,7 @@ function M.apply(bufnr, winid, qf_bufnr)
     if winid and vim.api.nvim_win_is_valid(winid) then
         desired_line = vim.api.nvim_win_get_cursor(winid)[1]
     end
+    local saved_view = vim.b[bufnr].csub_qf_view
 
     if #new_text_lines ~= #qf_orig then
         utils.echoerr(string.format("csub: Illegal edit: line number was changed from %d to %d.", #qf_orig,
@@ -81,11 +82,21 @@ function M.apply(bufnr, winid, qf_bufnr)
                 local lc = vim.api.nvim_buf_line_count(target_qfbuf)
                 local l = math.max(1, math.min(desired_line, lc))
                 pcall(vim.api.nvim_win_set_cursor, target_win, { l, 0 })
+                if saved_view then
+                    local restore = vim.deepcopy(saved_view)
+                    restore.lnum = l
+                    pcall(vim.fn.winrestview, restore)
+                end
             elseif qfwin and vim.api.nvim_win_is_valid(qfwin) and vim.api.nvim_buf_is_valid(target_qfbuf) then
                 window.use_buf(qfwin, target_qfbuf)
                 local lc = vim.api.nvim_buf_line_count(target_qfbuf)
                 local l = math.max(1, math.min(desired_line, lc))
                 pcall(vim.api.nvim_win_set_cursor, qfwin, { l, 0 })
+                if saved_view then
+                    local restore = vim.deepcopy(saved_view)
+                    restore.lnum = l
+                    pcall(vim.fn.winrestview, restore)
+                end
             end
         end)
     end

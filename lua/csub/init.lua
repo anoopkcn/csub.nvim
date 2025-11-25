@@ -10,6 +10,7 @@ local state = {
     qf_bufnr = nil,
     qf_winid = nil,
     qf_cursor = 1,
+    qf_view = nil,
 }
 
 local function set_cursor_safe(winid, bufnr, line)
@@ -42,8 +43,10 @@ local function open_replace_window()
 
     state.qf_winid = target_win
     state.qf_bufnr = vim.api.nvim_win_get_buf(target_win)
-    local cursor_line = vim.api.nvim_win_get_cursor(target_win)[1]
+    local view = vim.fn.winsaveview()
+    local cursor_line = view.lnum or vim.api.nvim_win_get_cursor(target_win)[1]
     state.qf_cursor = cursor_line
+    state.qf_view = view
 
     local bufnr = buffer.ensure_buffer(state, target_win, state.qf_bufnr, replace.apply)
     if not bufnr then
@@ -51,9 +54,16 @@ local function open_replace_window()
         return
     end
 
+    vim.b[bufnr].csub_qf_view = view
+
     buffer.populate(bufnr, current_qflist)
     window.apply_window_opts(target_win)
     set_cursor_safe(target_win, bufnr, cursor_line)
+    if view then
+        local restore = vim.deepcopy(view)
+        restore.lnum = cursor_line
+        pcall(vim.fn.winrestview, restore)
+    end
 end
 
 function M.start()
@@ -70,11 +80,21 @@ function M.start()
         if qfbuf and vim.api.nvim_buf_is_valid(qfbuf) then
             window.use_buf(vim.api.nvim_get_current_win(), qfbuf)
             set_cursor_safe(vim.api.nvim_get_current_win(), qfbuf, state.qf_cursor)
+            if state.qf_view then
+                local restore = vim.deepcopy(state.qf_view)
+                restore.lnum = state.qf_cursor
+                pcall(vim.fn.winrestview, restore)
+            end
         else
             local qfwin = window.ensure_quickfix_window()
             if qfwin and vim.api.nvim_win_is_valid(qfwin) then
                 vim.api.nvim_set_current_win(qfwin)
                 set_cursor_safe(qfwin, vim.api.nvim_win_get_buf(qfwin), state.qf_cursor)
+                if state.qf_view then
+                    local restore = vim.deepcopy(state.qf_view)
+                    restore.lnum = state.qf_cursor
+                    pcall(vim.fn.winrestview, restore)
+                end
             end
         end
 
