@@ -91,7 +91,13 @@ function M.quickfix_text(info)
     return fmt.quickfix_text(info)
 end
 
-function M.setup()
+function M.setup(opts)
+    opts = opts or {}
+
+    if opts.separator ~= nil then
+        fmt.separator = opts.separator
+    end
+
     vim.o.quickfixtextfunc = "v:lua.require'csub'.quickfix_text"
 
     -- default=true only sets the highlight if it doesn't already exist

@@ -1,6 +1,7 @@
 local M = {}
 
 M.META_WIDTH = 50
+M.separator = "|"
 
 local function normalize_name(entry)
     local name = ""
@@ -46,7 +47,13 @@ function M.format_meta(entry, opts)
         return string.rep(" ", width)
     end
 
-    local suffix = string.format("|%5d:%-4d| ", lnum, col)
+    local sep = M.separator
+    local suffix
+    if sep == "" then
+        suffix = string.format(" %5d:%-4d  ", lnum, col)
+    else
+        suffix = string.format("%s%5d:%-4d%s ", sep, lnum, col, sep)
+    end
     local name_width = math.max(width - #suffix, 1)
 
     local display_name = truncate_path(name, name_width)
@@ -67,18 +74,34 @@ function M.format_meta_chunks(entry, opts)
 
     local lnum = entry.lnum or 0
     local col = entry.col or 0
+    local sep = M.separator
     local suffix = string.format("%5d:%-4d", lnum, col)
-    local decorated_suffix_width = #suffix + 3 -- two pipes plus trailing space
+
+    local decorated_suffix_width
+    if sep == "" then
+        decorated_suffix_width = #suffix + 3 -- spaces around numbers plus trailing space
+    else
+        decorated_suffix_width = #suffix + #sep * 2 + 1 -- two separators plus trailing space
+    end
     local name_width = math.max(width - decorated_suffix_width, 1)
 
     local display_name = truncate_path(name, name_width)
     local padded_name = string.format("%-" .. name_width .. "s", display_name)
 
+    if sep == "" then
+        return {
+            { padded_name, "CsubMetaFileName" },
+            { " ", "CsubMetaFileName" },
+            { suffix, "CsubMetaNumber" },
+            { "  ", "CsubMetaFileName" },
+        }
+    end
+
     return {
         { padded_name, "CsubMetaFileName" },
-        { "|", "CsubSeparator" },
+        { sep, "CsubSeparator" },
         { suffix, "CsubMetaNumber" },
-        { "|", "CsubSeparator" },
+        { sep, "CsubSeparator" },
         { " ", "CsubMetaFileName" },
     }
 end
