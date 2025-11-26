@@ -31,11 +31,21 @@ local function truncate_path(path, max_width)
     return short:sub(-max_width)
 end
 
+local function is_context_line(entry, name)
+    return name == "" and (entry.lnum or 0) == 0 and (entry.col or 0) == 0
+end
+
 function M.format_meta(entry, opts)
     local width = (opts and opts.width) or M.META_WIDTH
     local name = normalize_name(entry)
     local lnum = entry.lnum or 0
     local col = entry.col or 0
+
+    -- For context lines (no file, no position), just use padding
+    if is_context_line(entry, name) then
+        return string.rep(" ", width)
+    end
+
     local suffix = string.format("|%5d:%-4d| ", lnum, col)
     local name_width = math.max(width - #suffix, 1)
 
@@ -47,6 +57,14 @@ end
 function M.format_meta_chunks(entry, opts)
     local width = (opts and opts.width) or M.META_WIDTH
     local name = normalize_name(entry)
+
+    -- For context lines (no file, no position), just use padding
+    if is_context_line(entry, name) then
+        return {
+            { string.rep(" ", width), "CsubMetaFileName" },
+        }
+    end
+
     local lnum = entry.lnum or 0
     local col = entry.col or 0
     local suffix = string.format("%5d:%-4d", lnum, col)
