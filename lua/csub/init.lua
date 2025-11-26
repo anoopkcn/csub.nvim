@@ -6,6 +6,8 @@ local window = require("csub.window")
 
 local M = {}
 
+local qf_ns = vim.api.nvim_create_namespace("csub_qf_meta")
+
 local state = {
     bufnr = nil,
     qf_bufnr = nil,
@@ -13,6 +15,31 @@ local state = {
     qf_cursor = 1,
     qf_view = nil,
 }
+
+local function highlight_qf_buffer()
+    local qf_info = vim.fn.getqflist({ qfbufnr = 0, items = 1 })
+    local qfbufnr = qf_info.qfbufnr
+    if not qfbufnr or qfbufnr == 0 or not vim.api.nvim_buf_is_valid(qfbufnr) then
+        return
+    end
+
+    local items = qf_info.items or {}
+    if #items == 0 then
+        return
+    end
+
+    vim.api.nvim_buf_clear_namespace(qfbufnr, qf_ns, 0, -1)
+
+    for idx, entry in ipairs(items) do
+        local chunks = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH })
+        vim.api.nvim_buf_set_extmark(qfbufnr, qf_ns, idx - 1, 0, {
+            virt_text = chunks,
+            virt_text_pos = "overlay",
+            hl_mode = "combine",
+            priority = 100,
+        })
+    end
+end
 
 local function open_replace_window()
     local current_qflist = vim.fn.getqflist()
@@ -110,6 +137,23 @@ function M.setup(opts)
         pattern = { "qf", "csub" },
         callback = function()
             vim.wo.wrap = false
+        end,
+    })
+
+    -- Apply extmark highlights to quickfix buffer
+    vim.api.nvim_create_autocmd("QuickFixCmdPost", {
+        pattern = "*",
+        callback = function()
+            vim.schedule(highlight_qf_buffer)
+        end,
+    })
+
+    -- Reapply highlights when quickfix window is opened
+    vim.api.nvim_create_autocmd("BufWinEnter", {
+        callback = function(args)
+            if vim.bo[args.buf].buftype == "quickfix" then
+                vim.schedule(highlight_qf_buffer)
+            end
         end,
     })
 
