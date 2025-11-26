@@ -9,9 +9,7 @@ local function normalize_name(entry)
     elseif entry.filename then
         name = entry.filename
     end
-    if name == "" then
-        name = "[No Name]"
-    end
+    -- Leave empty for entries without a file (e.g., compiler context lines)
     -- Make path relative to cwd
     local cwd = vim.uv.cwd() or ""
     if cwd ~= "" and name:sub(1, #cwd) == cwd then
