@@ -10,6 +10,10 @@ csub lets you edit the current quickfix list in a scratch buffer and write the
 changes back to the original files. It shows a metadata column (file|line:col)
 beside each entry to keep context while editing.
 
+Different modes allow csub to behave appropriately based on the quickfix source:
+- "replace" mode: Edit text to replace lines in source files (grep, make)
+- "buffers" mode: Delete lines to close buffers (buffer pickers)
+
 ==============================================================================
 SETUP                                                              *csub-setup*
 
@@ -20,6 +24,20 @@ require("csub").setup()
 <
 
 This registers the `quickfixtextfunc` and the `:Csub` command.
+
+With configuration:
+
+>lua
+require("csub").setup({
+    separator = "|",
+    handlers = {
+        { match = "FuzzyBuffers", mode = "buffers" },
+        { match = "FuzzyFiles",   mode = nil },
+        { match = "Grep",         mode = "replace" },
+    },
+    default_mode = "replace",
+})
+<
 
 ==============================================================================
 USAGE                                                              *csub-usage*
@@ -42,7 +60,44 @@ COMMANDS                                                        *csub-commands*
 ==============================================================================
 OPTIONS                                                          *csub-options*
 
-g:csub_no_save                                                    *g:csub_no_save*
+                                                                 *csub-separator*
+separator ~
+    String used to separate metadata columns. Default: "|"
+
+                                                                  *csub-handlers*
+handlers ~
+    List of handler tables to detect mode based on quickfix title. Each handler
+    has two fields:
+    - `match`: String to match against the quickfix list title (plain text)
+    - `mode`: Mode to use when matched ("replace", "buffers", or nil)
+
+    Handlers are checked in order; the first match wins.
+
+                                                              *csub-default_mode*
+default_mode ~
+    Fallback mode when no handler matches. Default: "replace"
+
+                                                                    *csub-modes*
+MODES ~
+
+csub supports different modes that change behavior on save:
+
+"replace" (default)                                          *csub-mode-replace*
+    - Delete line: Remove entry from quickfix list
+    - Edit text: Replace the line in the source file
+    - Use case: grep results, compiler errors, diagnostics
+
+"buffers"                                                    *csub-mode-buffers*
+    - Delete line: Close the buffer (`:bdelete`) and remove from quickfix
+    - Edit text: Ignored (no changes applied)
+    - Use case: Buffer pickers that populate quickfix
+    - Use `:w!` to force-close modified buffers
+
+nil                                                         *csub-mode-disabled*
+    - Disables csub for matching quickfix lists
+    - `:Csub` will show a message and do nothing
+
+g:csub_no_save                                                  *g:csub_no_save*
     When set to a non-zero value and 'hidden' is enabled, avoid saving buffers
     while applying changes (leave buffers modified but listed). Defaults to 0.
 
@@ -54,6 +109,8 @@ NOTES                                                              *csub-notes*
 - Original text changes in target files are detected; if the current buffer
   differs from the original quickfix text and from your edits, an error is
   reported and that entry is left unchanged.
+- Mode is detected from the quickfix title when `:Csub` is invoked.
+- In "buffers" mode, only line deletions have an effect; text edits are ignored.
 
 ==============================================================================
 LICENSE                                                          *csub-license*
