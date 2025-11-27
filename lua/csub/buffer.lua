@@ -22,9 +22,24 @@ local function set_metadata(bufnr, qf_entries)
     end
 end
 
+--- Find which indices were deleted by comparing previous and current lines
+local function find_deleted_indices(previous, current)
+    local deleted = {}
+    local curr_idx = 1
+    for prev_idx, prev_line in ipairs(previous) do
+        if curr_idx <= #current and current[curr_idx] == prev_line then
+            curr_idx = curr_idx + 1
+        else
+            table.insert(deleted, prev_idx)
+        end
+    end
+    return deleted
+end
+
 local function on_changed(bufnr)
-    local qf_entries = vim.b[bufnr].csub_orig_qflist or {}
-    local target = #qf_entries
+    local orig_entries = vim.b[bufnr].csub_orig_qflist or {}
+    local current_entries = vim.b[bufnr].csub_current_entries or orig_entries
+    local target = #orig_entries
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     local previous = vim.b[bufnr].csub_lines or lines
 
@@ -35,20 +50,36 @@ local function on_changed(bufnr)
                 return
             end
             vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, previous)
-            set_metadata(bufnr, qf_entries)
+            set_metadata(bufnr, current_entries)
             utils.silence_modified(bufnr)
             vim.notify("[csub] Cannot add lines beyond quickfix entries.", vim.log.levels.WARN)
         end)
         return
     end
 
+    -- If lines were deleted, update current_entries to match
+    if #lines < #previous then
+        local deleted = find_deleted_indices(previous, lines)
+        -- Remove deleted entries in reverse order to preserve indices
+        local new_entries = vim.deepcopy(current_entries)
+        for i = #deleted, 1, -1 do
+            local idx = deleted[i]
+            if idx <= #new_entries then
+                table.remove(new_entries, idx)
+            end
+        end
+        current_entries = new_entries
+        vim.b[bufnr].csub_current_entries = current_entries
+    end
+
     vim.b[bufnr].csub_lines = lines
-    set_metadata(bufnr, qf_entries)
+    set_metadata(bufnr, current_entries)
     utils.silence_modified(bufnr)
 end
 
 function M.populate(bufnr, qflist, mode)
     vim.b[bufnr].csub_orig_qflist = qflist
+    vim.b[bufnr].csub_current_entries = vim.deepcopy(qflist or {})
     vim.b[bufnr].csub_mode = mode or "replace"
     local lines = {}
     for _, entry in ipairs(qflist or {}) do
