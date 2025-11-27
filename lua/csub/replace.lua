@@ -18,18 +18,47 @@ local function save_current_buffer()
     end
 end
 
+--- Build a set of entry identifiers from current_entries for quick lookup
+local function build_entry_set(entries)
+    local set = {}
+    for _, entry in ipairs(entries) do
+        -- Use bufnr + lnum as unique identifier (or just bufnr for buffer lists)
+        local key = string.format("%d:%d", entry.bufnr or 0, entry.lnum or 0)
+        set[key] = true
+    end
+    return set
+end
+
 --- Apply changes in "replace" mode: edit lines in source files
-local function apply_replace(qf_orig, new_text_lines)
+local function apply_replace(qf_orig, current_entries, new_text_lines)
+    local current_set = build_entry_set(current_entries)
     local prev_bufnr = -1
 
-    for i, entry in ipairs(qf_orig) do
-        -- If line was deleted (beyond the new buffer's line count), mark for removal
-        if i > #new_text_lines then
+    for _, entry in ipairs(qf_orig) do
+        local key = string.format("%d:%d", entry.bufnr or 0, entry.lnum or 0)
+
+        -- If entry is not in current_entries, it was deleted
+        if not current_set[key] then
             entry._csub_deleted = true
             goto continue
         end
 
-        local new_text = new_text_lines[i]
+        -- Find the corresponding line in new_text_lines
+        local line_idx = nil
+        for i, curr in ipairs(current_entries) do
+            local curr_key = string.format("%d:%d", curr.bufnr or 0, curr.lnum or 0)
+            if curr_key == key then
+                line_idx = i
+                break
+            end
+        end
+
+        if not line_idx or line_idx > #new_text_lines then
+            entry._csub_deleted = true
+            goto continue
+        end
+
+        local new_text = new_text_lines[line_idx]
         if entry.text == new_text then
             goto continue
         end
@@ -66,13 +95,16 @@ local function apply_replace(qf_orig, new_text_lines)
 end
 
 --- Apply changes in "buffers" mode: close deleted buffers, ignore text edits
-local function apply_buffers(qf_orig, new_text_lines)
+local function apply_buffers(qf_orig, current_entries)
+    local current_set = build_entry_set(current_entries)
     -- Track which buffers to close (use set to avoid duplicates)
     local buffers_to_close = {}
 
-    for i, entry in ipairs(qf_orig) do
-        -- If line was deleted (beyond the new buffer's line count), mark for removal and close buffer
-        if i > #new_text_lines then
+    for _, entry in ipairs(qf_orig) do
+        local key = string.format("%d:%d", entry.bufnr or 0, entry.lnum or 0)
+
+        -- If entry is not in current_entries, it was deleted
+        if not current_set[key] then
             entry._csub_deleted = true
             if entry.bufnr and entry.bufnr ~= 0 and vim.api.nvim_buf_is_valid(entry.bufnr) then
                 buffers_to_close[entry.bufnr] = true
@@ -95,6 +127,7 @@ end
 
 function M.apply(bufnr, winid, qf_bufnr)
     local qf_stored = vim.b[bufnr].csub_orig_qflist or {}
+    local current_entries = vim.b[bufnr].csub_current_entries or qf_stored
     local mode = vim.b[bufnr].csub_mode or "replace"
     -- Deep copy to avoid modifying the stored qflist
     local qf_orig = vim.deepcopy(qf_stored)
@@ -117,10 +150,10 @@ function M.apply(bufnr, winid, qf_bufnr)
 
     -- Dispatch to the appropriate mode handler
     if mode == "buffers" then
-        apply_buffers(qf_orig, new_text_lines)
+        apply_buffers(qf_orig, current_entries)
     else
         -- Default to "replace" mode
-        apply_replace(qf_orig, new_text_lines)
+        apply_replace(qf_orig, current_entries, new_text_lines)
     end
 
     vim.api.nvim_set_current_buf(qf_bufnr)
