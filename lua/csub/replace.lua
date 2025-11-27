@@ -18,27 +18,8 @@ local function save_current_buffer()
     end
 end
 
-function M.apply(bufnr, winid, qf_bufnr)
-    local qf_stored = vim.b[bufnr].csub_orig_qflist or {}
-    -- Deep copy to avoid modifying the stored qflist
-    local qf_orig = vim.deepcopy(qf_stored)
-    local new_text_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    local desired_line = 1
-    if winid and vim.api.nvim_win_is_valid(winid) then
-        desired_line = vim.api.nvim_win_get_cursor(winid)[1]
-    end
-    local saved_view = view.save(winid, bufnr)
-
-    -- Allow deletions (fewer lines), but not additions (more lines)
-    if #new_text_lines > #qf_orig then
-        utils.echoerr(string.format("csub: Cannot add lines beyond quickfix entries (quickfix: %d, buffer: %d).",
-            #qf_orig,
-            #new_text_lines))
-        return
-    end
-
-    vim.bo[bufnr].modified = false
-
+--- Apply changes in "replace" mode: edit lines in source files
+local function apply_replace(qf_orig, new_text_lines)
     local prev_bufnr = -1
 
     for i, entry in ipairs(qf_orig) do
@@ -82,6 +63,66 @@ function M.apply(bufnr, winid, qf_bufnr)
     end
 
     save_current_buffer()
+end
+
+--- Apply changes in "buffers" mode: close deleted buffers, ignore text edits
+local function apply_buffers(qf_orig, new_text_lines)
+    -- Track which buffers to close (use set to avoid duplicates)
+    local buffers_to_close = {}
+
+    for i, entry in ipairs(qf_orig) do
+        -- If line was deleted (beyond the new buffer's line count), mark for removal and close buffer
+        if i > #new_text_lines then
+            entry._csub_deleted = true
+            if entry.bufnr and entry.bufnr ~= 0 and vim.api.nvim_buf_is_valid(entry.bufnr) then
+                buffers_to_close[entry.bufnr] = true
+            end
+        end
+        -- Text edits are ignored in buffers mode - we only care about deletions
+    end
+
+    -- Close the buffers (use bdelete to keep window layout)
+    for buf, _ in pairs(buffers_to_close) do
+        if vim.api.nvim_buf_is_valid(buf) then
+            local ok, err = pcall(vim.cmd.bdelete, { args = { buf }, bang = vim.v.cmdbang == 1 })
+            if not ok then
+                utils.echoerr(string.format("csub: Failed to close buffer %s: %s",
+                    vim.fn.bufname(buf), err))
+            end
+        end
+    end
+end
+
+function M.apply(bufnr, winid, qf_bufnr)
+    local qf_stored = vim.b[bufnr].csub_orig_qflist or {}
+    local mode = vim.b[bufnr].csub_mode or "replace"
+    -- Deep copy to avoid modifying the stored qflist
+    local qf_orig = vim.deepcopy(qf_stored)
+    local new_text_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local desired_line = 1
+    if winid and vim.api.nvim_win_is_valid(winid) then
+        desired_line = vim.api.nvim_win_get_cursor(winid)[1]
+    end
+    local saved_view = view.save(winid, bufnr)
+
+    -- Allow deletions (fewer lines), but not additions (more lines)
+    if #new_text_lines > #qf_orig then
+        utils.echoerr(string.format("csub: Cannot add lines beyond quickfix entries (quickfix: %d, buffer: %d).",
+            #qf_orig,
+            #new_text_lines))
+        return
+    end
+
+    vim.bo[bufnr].modified = false
+
+    -- Dispatch to the appropriate mode handler
+    if mode == "buffers" then
+        apply_buffers(qf_orig, new_text_lines)
+    else
+        -- Default to "replace" mode
+        apply_replace(qf_orig, new_text_lines)
+    end
+
     vim.api.nvim_set_current_buf(qf_bufnr)
 
     -- Filter out deleted entries before updating the quickfix list

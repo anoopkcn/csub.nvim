@@ -47,8 +47,9 @@ local function on_changed(bufnr)
     utils.silence_modified(bufnr)
 end
 
-function M.populate(bufnr, qflist)
+function M.populate(bufnr, qflist, mode)
     vim.b[bufnr].csub_orig_qflist = qflist
+    vim.b[bufnr].csub_mode = mode or "replace"
     local lines = {}
     for _, entry in ipairs(qflist or {}) do
         table.insert(lines, utils.chomp(entry.text))

@@ -16,6 +16,26 @@ local state = {
     qf_view = nil,
 }
 
+local config = {
+    handlers = {},
+    default_mode = "replace",
+}
+
+--- Detect the mode for the current quickfix list based on its title
+--- @return string|nil mode The detected mode, or nil if csub should be disabled
+local function detect_mode()
+    local qf_info = vim.fn.getqflist({ title = 0 })
+    local title = qf_info.title or ""
+
+    for _, handler in ipairs(config.handlers) do
+        if title:find(handler.match, 1, true) then
+            return handler.mode -- can be nil to disable csub
+        end
+    end
+
+    return config.default_mode
+end
+
 local function highlight_qf_buffer()
     local qf_info = vim.fn.getqflist({ qfbufnr = 0, items = 1 })
     local qfbufnr = qf_info.qfbufnr
@@ -48,6 +68,13 @@ local function open_replace_window()
         return
     end
 
+    -- Detect mode from quickfix title
+    local mode = detect_mode()
+    if mode == nil then
+        vim.notify("[csub] Csub is disabled for this quickfix list.", vim.log.levels.INFO)
+        return
+    end
+
     -- Only use stored window if it's still a valid quickfix window
     local target_win = state.qf_winid
     if not window.is_quickfix_window(target_win) then
@@ -72,8 +99,9 @@ local function open_replace_window()
     end
 
     vim.b[bufnr].csub_qf_view = qf_view
+    vim.b[bufnr].csub_mode = mode
 
-    buffer.populate(bufnr, current_qflist)
+    buffer.populate(bufnr, current_qflist, mode)
     window.apply_window_opts(target_win)
     view.restore(target_win, bufnr, qf_view, cursor_line)
 end
@@ -90,7 +118,8 @@ function M.start()
 
         local current_qflist = vim.fn.getqflist()
         if current_qflist and not vim.tbl_isempty(current_qflist) then
-            buffer.populate(state.bufnr, current_qflist)
+            local mode = vim.b[state.bufnr].csub_mode or config.default_mode
+            buffer.populate(state.bufnr, current_qflist, mode)
         end
 
         local qf_info = vim.fn.getqflist({ qfbufnr = 0 }) or {}
@@ -123,6 +152,14 @@ function M.setup(opts)
 
     if opts.separator ~= nil then
         fmt.separator = opts.separator
+    end
+
+    if opts.handlers ~= nil then
+        config.handlers = opts.handlers
+    end
+
+    if opts.default_mode ~= nil then
+        config.default_mode = opts.default_mode
     end
 
     vim.o.quickfixtextfunc = "v:lua.require'csub'.quickfix_text"
