@@ -6,49 +6,42 @@ local ns = vim.api.nvim_create_namespace("csub_meta")
 
 local M = {}
 
-local function set_metadata(bufnr, qf_entries)
-    local line_count = vim.api.nvim_buf_line_count(bufnr)
+local function set_metadata(bufnr, entries)
     vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
-    for idx, entry in ipairs(qf_entries) do
-        if idx > line_count then
-            break
-        end
-        local meta = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH })
+    local line_count = vim.api.nvim_buf_line_count(bufnr)
+    for idx, entry in ipairs(entries) do
+        if idx > line_count then break end
         vim.api.nvim_buf_set_extmark(bufnr, ns, idx - 1, 0, {
-            virt_text = meta,
+            virt_text = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH }),
             virt_text_pos = "inline",
             hl_mode = "combine",
         })
     end
 end
 
---- Find which indices were deleted by comparing previous and current lines
-local function find_deleted_indices(previous, current)
-    local deleted = {}
+--- Update current_entries by removing entries at deleted line indices
+local function remove_deleted_entries(current_entries, previous, lines)
+    local new_entries = {}
     local curr_idx = 1
     for prev_idx, prev_line in ipairs(previous) do
-        if curr_idx <= #current and current[curr_idx] == prev_line then
+        if curr_idx <= #lines and lines[curr_idx] == prev_line then
+            new_entries[#new_entries + 1] = current_entries[prev_idx]
             curr_idx = curr_idx + 1
-        else
-            table.insert(deleted, prev_idx)
         end
     end
-    return deleted
+    return new_entries
 end
 
 local function on_changed(bufnr)
     local orig_entries = vim.b[bufnr].csub_orig_qflist or {}
     local current_entries = vim.b[bufnr].csub_current_entries or orig_entries
-    local target = #orig_entries
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     local previous = vim.b[bufnr].csub_lines or lines
 
-    -- Allow deletions (fewer lines), but not additions (more lines)
-    if #lines > target then
+    -- Reject additions (more lines than original)
+    if #lines > #orig_entries then
         vim.schedule(function()
-            if not vim.api.nvim_buf_is_valid(bufnr) then
-                return
-            end
+            if not vim.api.nvim_buf_is_valid(bufnr) then return end
             vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, previous)
             set_metadata(bufnr, current_entries)
             utils.silence_modified(bufnr)
@@ -57,18 +50,9 @@ local function on_changed(bufnr)
         return
     end
 
-    -- If lines were deleted, update current_entries to match
+    -- Update current_entries if lines were deleted
     if #lines < #previous then
-        local deleted = find_deleted_indices(previous, lines)
-        -- Remove deleted entries in reverse order to preserve indices
-        local new_entries = vim.deepcopy(current_entries)
-        for i = #deleted, 1, -1 do
-            local idx = deleted[i]
-            if idx <= #new_entries then
-                table.remove(new_entries, idx)
-            end
-        end
-        current_entries = new_entries
+        current_entries = remove_deleted_entries(current_entries, previous, lines)
         vim.b[bufnr].csub_current_entries = current_entries
     end
 
@@ -78,17 +62,20 @@ local function on_changed(bufnr)
 end
 
 function M.populate(bufnr, qflist, mode)
+    qflist = qflist or {}
     vim.b[bufnr].csub_orig_qflist = qflist
-    vim.b[bufnr].csub_current_entries = vim.deepcopy(qflist or {})
+    vim.b[bufnr].csub_current_entries = vim.deepcopy(qflist)
     vim.b[bufnr].csub_mode = mode or "replace"
+
     local lines = {}
-    for _, entry in ipairs(qflist or {}) do
-        table.insert(lines, utils.chomp(entry.text))
+    for i, entry in ipairs(qflist) do
+        lines[i] = utils.chomp(entry.text)
     end
+
     vim.bo[bufnr].modifiable = true
     vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-    set_metadata(bufnr, qflist or {})
-    vim.b[bufnr].csub_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    set_metadata(bufnr, qflist)
+    vim.b[bufnr].csub_lines = lines
     vim.bo[bufnr].modified = false
 end
 

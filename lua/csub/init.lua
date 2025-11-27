@@ -99,8 +99,6 @@ local function open_replace_window()
     end
 
     vim.b[bufnr].csub_qf_view = qf_view
-    vim.b[bufnr].csub_mode = mode
-
     buffer.populate(bufnr, current_qflist, mode)
     window.apply_window_opts(target_win)
     view.restore(target_win, bufnr, qf_view, cursor_line)
