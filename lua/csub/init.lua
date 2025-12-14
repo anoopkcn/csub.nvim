@@ -211,11 +211,6 @@ function M.setup(opts)
         callback = function(args)
             if vim.bo[args.buf].buftype == "quickfix" then
                 vim.schedule(highlight_qf_buffer)
-                -- Apply window options to prevent QuickFixLine highlight bleeding
-                local winid = vim.fn.bufwinid(args.buf)
-                if winid ~= -1 then
-                    window.apply_window_opts(winid)
-                end
             end
         end,
     })
