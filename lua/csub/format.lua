@@ -1,19 +1,22 @@
 local M = {}
 
+-- Cache frequently used API functions
+local buf_get_name = vim.api.nvim_buf_get_name
+
 M.META_WIDTH = 50
 M.separator = "|"
 
 local function normalize_name(entry)
     local name = ""
     if entry.bufnr and entry.bufnr ~= 0 then
-        name = vim.api.nvim_buf_get_name(entry.bufnr)
+        name = buf_get_name(entry.bufnr)
     elseif entry.filename then
         name = entry.filename
     end
     -- Leave empty for entries without a file (e.g., compiler context lines)
     -- Make path relative to cwd
-    local cwd = vim.uv.cwd() or ""
-    if cwd ~= "" and name:sub(1, #cwd) == cwd then
+    local cwd = vim.uv.cwd()
+    if cwd and name:sub(1, #cwd) == cwd then
         name = name:sub(#cwd + 2) -- +2 to skip the trailing slash
     end
     return name
@@ -117,11 +120,14 @@ function M.quickfix_text(info)
         return {}
     end
 
+    -- Pre-allocate table with known size
+    local count = info.end_idx - info.start_idx + 1
     local lines = {}
-    for i = info.start_idx, info.end_idx do
-        local e = items[i]
+    for i = 1, count do
+        local idx = info.start_idx + i - 1
+        local e = items[idx]
         local meta = M.format_meta(e, { width = M.META_WIDTH })
-        table.insert(lines, meta .. (e.text or ""))
+        lines[i] = meta .. (e.text or "")
     end
     return lines
 end

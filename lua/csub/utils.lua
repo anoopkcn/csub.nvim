@@ -1,21 +1,17 @@
 local M = {}
 
+-- Cache frequently used API functions
+local buf_is_valid = vim.api.nvim_buf_is_valid
+
 function M.chomp(str)
     local s = str or ""
-    local without_cr = s:gsub("\r$", "")
-    return without_cr
-end
-
-function M.with_buf(bufnr, fn)
-    if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
-        fn(bufnr)
-    end
+    return s:gsub("\r$", "")
 end
 
 function M.silence_modified(bufnr)
-    M.with_buf(bufnr, function(b)
-        vim.bo[b].modified = false
-    end)
+    if bufnr and buf_is_valid(bufnr) then
+        vim.bo[bufnr].modified = false
+    end
 end
 
 function M.echoerr(msg)
