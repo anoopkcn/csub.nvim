@@ -56,9 +56,6 @@ The `setup()` function accepts an optional table:
 
 ```lua
 require("csub").setup({
-    -- Metadata separator (default: "|")
-    separator = "|",
-
     -- Handlers to detect mode based on quickfix title
     handlers = {
         { match = "FuzzyBuffers", mode = "buffers" },

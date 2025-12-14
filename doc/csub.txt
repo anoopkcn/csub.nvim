@@ -29,7 +29,6 @@ With configuration:
 
 >lua
 require("csub").setup({
-    separator = "|",
     handlers = {
         { match = "FuzzyBuffers", mode = "buffers" },
         { match = "FuzzyFiles",   mode = nil },
@@ -59,10 +58,6 @@ COMMANDS                                                        *csub-commands*
 
 ==============================================================================
 OPTIONS                                                          *csub-options*
-
-                                                                 *csub-separator*
-separator ~
-    String used to separate metadata columns. Default: "|"
 
                                                                   *csub-handlers*
 handlers ~
