@@ -165,10 +165,6 @@ end
 function M.setup(opts)
     opts = opts or {}
 
-    if opts.separator ~= nil then
-        fmt.separator = opts.separator
-    end
-
     if opts.handlers ~= nil then
         config.handlers = opts.handlers
     end
