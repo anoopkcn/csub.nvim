@@ -50,12 +50,14 @@ function M.format_meta(entry, opts)
         return string.rep(" ", width)
     end
 
-    local sep = M.separator
+    -- Always use "|" in the actual quickfix text (when separator is not empty)
+    -- so Neovim's native highlighting (QuickFixLine, etc.) works correctly.
+    -- The visual separator from M.separator is applied via virtual text overlay.
     local suffix
-    if sep == "" then
+    if M.separator == "" then
         suffix = string.format(" %5d:%-4d  ", lnum, col)
     else
-        suffix = string.format("%s%5d:%-4d%s ", sep, lnum, col, sep)
+        suffix = string.format("|%5d:%-4d| ", lnum, col)
     end
     local name_width = math.max(width - #suffix, 1)
 
