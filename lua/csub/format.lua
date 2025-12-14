@@ -53,17 +53,31 @@ function M.format_meta(entry, opts)
     -- Always use "|" in the actual quickfix text (when separator is not empty)
     -- so Neovim's native highlighting (QuickFixLine, etc.) works correctly.
     -- The visual separator from M.separator is applied via virtual text overlay.
-    local suffix
-    if M.separator == "" then
-        suffix = string.format(" %5d:%-4d  ", lnum, col)
+    -- Width calculation must match format_meta_chunks() so the overlay covers exactly.
+    local sep = M.separator
+    local num_part = string.format("%5d:%-4d", lnum, col) -- 10 chars
+    local suffix_width
+    if sep == "" then
+        suffix_width = #num_part + 3 -- spaces around numbers plus trailing space
     else
-        suffix = string.format("|%5d:%-4d| ", lnum, col)
+        suffix_width = #num_part + #sep * 2 + 1 -- match custom separator width
     end
-    local name_width = math.max(width - #suffix, 1)
-
+    local name_width = math.max(width - suffix_width, 1)
     local display_name = truncate_path(name, name_width)
+    local padded_name = string.format("%-" .. name_width .. "s", display_name)
 
-    return string.format("%-" .. name_width .. "s%s", display_name, suffix)
+    -- Build suffix with "|" but padded to match custom separator width
+    local suffix
+    if sep == "" then
+        suffix = string.format(" %s  ", num_part)
+    else
+        -- Use "|" for Neovim parsing, pad to match custom separator width
+        local pipe_suffix = string.format("|%s|", num_part)
+        local padding = suffix_width - #pipe_suffix - 1 -- -1 for trailing space
+        suffix = pipe_suffix .. string.rep(" ", math.max(padding, 0)) .. " "
+    end
+
+    return padded_name .. suffix
 end
 
 function M.format_meta_chunks(entry, opts)
