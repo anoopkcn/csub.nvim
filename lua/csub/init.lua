@@ -71,7 +71,7 @@ local function highlight_qf_buffer()
         buf_set_extmark(qfbufnr, qf_ns, idx - 1, 0, {
             virt_text = chunks,
             virt_text_pos = "overlay",
-            hl_mode = "combine",
+            hl_mode = "replace",
             priority = 100,
             strict = false,
         })
@@ -211,6 +211,11 @@ function M.setup(opts)
         callback = function(args)
             if vim.bo[args.buf].buftype == "quickfix" then
                 vim.schedule(highlight_qf_buffer)
+                -- Apply window options to prevent QuickFixLine highlight bleeding
+                local winid = vim.fn.bufwinid(args.buf)
+                if winid ~= -1 then
+                    window.apply_window_opts(winid)
+                end
             end
         end,
     })

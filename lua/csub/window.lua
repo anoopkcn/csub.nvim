@@ -12,6 +12,8 @@ local set_option_value = vim.api.nvim_set_option_value
 function M.apply_window_opts(winid)
     if winid and win_is_valid(winid) then
         set_option_value("wrap", false, { scope = "local", win = winid })
+        -- Override QuickFixLine to prevent highlight bleeding to other lines
+        set_option_value("winhighlight", "QuickFixLine:CursorLine", { scope = "local", win = winid })
     end
 end
 
