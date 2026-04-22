@@ -178,12 +178,14 @@ function M.apply(bufnr, winid, qf_bufnr)
     local target_qfbuf = qf_info and qf_info.qfbufnr or qf_bufnr
     if not target_qfbuf then return end
 
-    local target_win = window.find_window_with_buf(bufnr) or winid
-    local qfwin = window.find_quickfix_window() or window.ensure_quickfix_window()
-
     vim.schedule(function()
-        local win = (target_win and win_is_valid(target_win) and target_win)
-            or (qfwin and win_is_valid(qfwin) and qfwin)
+        local win = (window.find_window_with_buf(bufnr) or winid)
+        if not (win and win_is_valid(win)) then
+            win = window.find_quickfix_window()
+        end
+        if not (win and win_is_valid(win)) then
+            win = window.ensure_quickfix_window()
+        end
         if win and buf_is_valid(target_qfbuf) then
             window.use_buf(win, target_qfbuf)
             local line = math.max(1, math.min(desired_line, buf_line_count(target_qfbuf)))
