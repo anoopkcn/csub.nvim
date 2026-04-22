@@ -44,8 +44,10 @@ USAGE                                                              *csub-usage*
 - Populate a quickfix list (e.g. via `:make`, `:grep`, `:vim.diagnostic.setqflist`).
 - Run `:Csub` to open the editable buffer for the current quickfix list in the
   quickfix window.
-- Edit the lines directly. Line count must stay unchanged; attempts to add or
-  remove lines are reverted with a warning.
+- Edit the lines directly. Deleting a line removes that quickfix entry;
+  attempts to add lines are reverted with a warning.
+- Run `:Csub` again to jump back to the quickfix window while keeping unsaved
+  edits in the csub buffer.
 - Write (`:w`) to apply changes back to the underlying files/quickfix entries;
   the quickfix window is shown again after writing.
 

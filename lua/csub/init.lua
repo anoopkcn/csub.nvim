@@ -37,6 +37,10 @@ local config = {
     default_mode = "replace",
 }
 
+local function current_qf_id()
+    return (vim.fn.getqflist({ id = 0 }).id) or 0
+end
+
 --- Detect the mode for the current quickfix list based on its title
 --- @return string|nil mode The detected mode, or nil if csub should be disabled
 local function detect_mode()
@@ -106,8 +110,21 @@ local function open_replace_window()
     state.qf_bufnr = win_get_buf(target_win)
     local qf_view = view.save(target_win, state.qf_bufnr)
     local cursor_line = (qf_view and qf_view.lnum) or win_get_cursor(target_win)[1]
+    local qf_id = current_qf_id()
     state.qf_cursor = cursor_line
     state.qf_view = qf_view
+
+    if state.bufnr
+        and buf_is_valid(state.bufnr)
+        and vim.b[state.bufnr].csub_dirty
+        and vim.b[state.bufnr].csub_qf_id
+        and vim.b[state.bufnr].csub_qf_id ~= qf_id then
+        vim.notify(
+            "[csub] Existing csub buffer has unsaved changes for another quickfix list.",
+            vim.log.levels.WARN
+        )
+        return
+    end
 
     local bufnr = buffer.ensure_buffer(state, target_win, state.qf_bufnr, replace.apply)
     if not bufnr then
@@ -116,7 +133,13 @@ local function open_replace_window()
     end
 
     vim.b[bufnr].csub_qf_view = qf_view
-    buffer.populate(bufnr, current_qflist, mode)
+
+    if vim.b[bufnr].csub_dirty and vim.b[bufnr].csub_qf_id == qf_id then
+        vim.b[bufnr].csub_mode = mode
+    else
+        buffer.populate(bufnr, current_qflist, mode, { qf_id = qf_id })
+    end
+
     window.apply_window_opts(target_win)
     view.restore(target_win, bufnr, qf_view, cursor_line)
 end
@@ -130,12 +153,6 @@ function M.start()
         new_view.lnum = current_line
         state.qf_view = new_view
         vim.b[state.bufnr].csub_qf_view = new_view
-
-        local current_qflist = vim.fn.getqflist()
-        if current_qflist and #current_qflist > 0 then
-            local mode = vim.b[state.bufnr].csub_mode or config.default_mode
-            buffer.populate(state.bufnr, current_qflist, mode)
-        end
 
         local qf_info = vim.fn.getqflist({ qfbufnr = 1 }) or {}
         local qfbuf = (qf_info.qfbufnr and qf_info.qfbufnr ~= 0) and qf_info.qfbufnr or state.qf_bufnr
@@ -213,7 +230,10 @@ function M.setup(opts)
 
     create_user_command("Csub", function()
         M.start()
-    end, { nargs = 0 })
+    end, {
+        desc = "Toggle an editable quickfix buffer",
+        nargs = 0,
+    })
 end
 
 return M

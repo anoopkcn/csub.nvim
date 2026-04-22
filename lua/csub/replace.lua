@@ -1,54 +1,73 @@
+local buffer = require("csub.buffer")
 local utils = require("csub.utils")
 local view = require("csub.view")
 local window = require("csub.window")
 
 -- Cache frequently used API functions
 local buf_is_valid = vim.api.nvim_buf_is_valid
+local buf_is_loaded = vim.api.nvim_buf_is_loaded
 local win_is_valid = vim.api.nvim_win_is_valid
 local buf_get_lines = vim.api.nvim_buf_get_lines
 local buf_set_lines = vim.api.nvim_buf_set_lines
 local buf_line_count = vim.api.nvim_buf_line_count
-local set_current_buf = vim.api.nvim_set_current_buf
+local buf_call = vim.api.nvim_buf_call
 local win_get_cursor = vim.api.nvim_win_get_cursor
 
 local M = {}
 
---- Generate unique key for an entry
-local function entry_key(entry)
-    return (entry.bufnr or 0) * 1000000 + (entry.lnum or 0)
+local function entry_id(entry, fallback)
+    return entry._csub_id or fallback
 end
 
-local function save_current_buffer()
+local function ensure_loaded(bufnr)
+    if buf_is_valid(bufnr) and not buf_is_loaded(bufnr) then
+        vim.fn.bufload(bufnr)
+    end
+end
+
+local function save_buffer(bufnr)
+    if not (bufnr and buf_is_valid(bufnr) and buf_is_loaded(bufnr)) then
+        return
+    end
+
     local no_save = vim.g.csub_no_save or vim.g.csubstitute_no_save or 0
-    if vim.o.hidden and no_save ~= 0 then
-        if vim.bo.modified then
-            vim.bo.buflisted = true
-        end
-    else
-        if vim.bo.modified then
+    buf_call(bufnr, function()
+        if vim.o.hidden and no_save ~= 0 then
+            if vim.bo.modified then
+                vim.bo.buflisted = true
+            end
+        elseif vim.bo.modified then
             vim.cmd.update({ bang = vim.v.cmdbang == 1 })
         end
-    end
+    end)
 end
 
 --- Build lookup tables from current_entries: set for membership, index for position
 local function build_entry_index(entries)
     local set, index = {}, {}
     for i, entry in ipairs(entries) do
-        local key = entry_key(entry)
+        local key = entry_id(entry, i)
         set[key] = true
         index[key] = i
     end
     return set, index
 end
 
+local function strip_internal_fields(entries)
+    for _, entry in ipairs(entries) do
+        entry._csub_deleted = nil
+        entry._csub_id = nil
+    end
+    return entries
+end
+
 --- Apply changes in "replace" mode: edit lines in source files
 local function apply_replace(qf_orig, current_entries, new_text_lines)
-    local current_set, current_index = build_entry_index(current_entries)
+    local _, current_index = build_entry_index(current_entries)
     local prev_bufnr = -1
 
     for _, entry in ipairs(qf_orig) do
-        local key = entry_key(entry)
+        local key = entry_id(entry)
         local line_idx = current_index[key]
 
         -- If entry is not in current_entries, it was deleted
@@ -69,9 +88,9 @@ local function apply_replace(qf_orig, current_entries, new_text_lines)
 
         if prev_bufnr ~= entry.bufnr then
             if prev_bufnr ~= -1 then
-                save_current_buffer()
+                save_buffer(prev_bufnr)
             end
-            set_current_buf(entry.bufnr)
+            ensure_loaded(entry.bufnr)
         end
 
         local current_line = buf_get_lines(entry.bufnr, entry.lnum - 1, entry.lnum, false)[1] or ""
@@ -84,13 +103,14 @@ local function apply_replace(qf_orig, current_entries, new_text_lines)
         else
             buf_set_lines(entry.bufnr, entry.lnum - 1, entry.lnum, false, { new_text })
             entry.text = new_text
+            current_entries[line_idx].text = new_text
         end
 
         prev_bufnr = entry.bufnr
         ::continue::
     end
 
-    save_current_buffer()
+    save_buffer(prev_bufnr)
 end
 
 --- Apply changes in "buffers" mode: close deleted buffers, ignore text edits
@@ -99,7 +119,7 @@ local function apply_buffers(qf_orig, current_entries)
     local buffers_to_close = {}
 
     for _, entry in ipairs(qf_orig) do
-        if not current_set[entry_key(entry)] then
+        if not current_set[entry_id(entry)] then
             entry._csub_deleted = true
             local buf = entry.bufnr
             if buf and buf ~= 0 and buf_is_valid(buf) then
@@ -124,7 +144,7 @@ function M.apply(bufnr, winid, qf_bufnr)
     local qf_stored = vim.b[bufnr].csub_orig_qflist or {}
     local current_entries = vim.b[bufnr].csub_current_entries or qf_stored
     local mode = vim.b[bufnr].csub_mode or "replace"
-    local qf_orig = vim.deepcopy(qf_stored)
+    local qf_orig = vim.deepcopy(qf_stored, true)
     local new_text_lines = buf_get_lines(bufnr, 0, -1, false)
 
     if #new_text_lines > #qf_orig then
@@ -144,15 +164,17 @@ function M.apply(bufnr, winid, qf_bufnr)
         apply_replace(qf_orig, current_entries, new_text_lines)
     end
 
-    set_current_buf(qf_bufnr)
-
     -- vim.iter available in 0.10+
     local filtered_qf = vim.iter(qf_orig):filter(function(e)
         return not e._csub_deleted
     end):totable()
-    vim.fn.setqflist(filtered_qf, "r")
+    local qf_for_write = strip_internal_fields(vim.deepcopy(filtered_qf, true))
+    vim.fn.setqflist(qf_for_write, "r")
 
-    local qf_info = vim.fn.getqflist({ qfbufnr = 1 })
+    local qf_info = vim.fn.getqflist({ id = 0, qfbufnr = 1 })
+    local qf_id = qf_info and qf_info.id or vim.b[bufnr].csub_qf_id
+    buffer.populate(bufnr, filtered_qf, mode, { qf_id = qf_id })
+
     local target_qfbuf = qf_info and qf_info.qfbufnr or qf_bufnr
     if not target_qfbuf then return end
 

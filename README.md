@@ -6,7 +6,7 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 - Opens the quickfix list in an editable buffer (`[csub]`, `filetype=csub`)
 - Shows file/line/col metadata as virtual text beside each entry
 - Applies changes to the underlying files and quickfix list on write
-- Run `:Csub` switch back and forth between the quickfix list and the csub buffer
+- Run `:Csub` to switch back and forth between the quickfix list and the csub buffer
 - Supports different modes based on quickfix source (text replacement, buffer management)
 
 **Example: Find and Replace**
@@ -21,6 +21,7 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 
 ## Requirements
 - Neovim 0.12 or higher
+- Verified with Neovim 0.12.1
 
 ## Installation
 
@@ -90,8 +91,9 @@ Handlers allow csub to behave differently based on what command created the quic
 ## Usage
 1. Populate a quickfix list (e.g. `:make`, `:grep`, diagnostics).
 2. Run `:Csub` to open the list in the existing quickfix window for editing.
-3. Edit the lines directly; keep the line count unchanged.
-4. Write (`:w`) to apply changes back to the underlying files and quickfix list; the view jumps back to the quickfix list.
+3. Edit the lines directly. Deleting a line removes that quickfix entry; adding lines is rejected.
+4. Run `:Csub` again at any point to toggle back to the quickfix window without discarding unsaved edits.
+5. Write (`:w`) to apply changes back to the underlying files and quickfix list; the view jumps back to the quickfix list.
 
 **NOTE: closing the csub buffer without writing discards all changes.**
 

@@ -10,6 +10,7 @@ local buf_set_lines = vim.api.nvim_buf_set_lines
 local buf_line_count = vim.api.nvim_buf_line_count
 local buf_set_extmark = vim.api.nvim_buf_set_extmark
 local buf_clear_namespace = vim.api.nvim_buf_clear_namespace
+local buf_attach = vim.api.nvim_buf_attach
 local create_buf = vim.api.nvim_create_buf
 local buf_set_name = vim.api.nvim_buf_set_name
 local list_bufs = vim.api.nvim_list_bufs
@@ -18,6 +19,14 @@ local create_autocmd = vim.api.nvim_create_autocmd
 local ns = vim.api.nvim_create_namespace("csub_meta")
 
 local M = {}
+
+local function clone_entries(qflist)
+    local entries = vim.deepcopy(qflist or {}, true)
+    for i, entry in ipairs(entries) do
+        entry._csub_id = i
+    end
+    return entries
+end
 
 local function set_metadata(bufnr, entries)
     buf_clear_namespace(bufnr, ns, 0, -1)
@@ -33,64 +42,110 @@ local function set_metadata(bufnr, entries)
     end
 end
 
---- Update current_entries by removing entries at deleted line indices
-local function remove_deleted_entries(current_entries, previous, lines)
+local function shrink_entry_range(current_entries, firstline, lastline, new_lastline)
+    if lastline <= firstline then
+        return current_entries
+    end
+
+    local keep_in_range = math.max(new_lastline - firstline, 0)
     local new_entries = {}
-    local curr_idx = 1
-    for prev_idx, prev_line in ipairs(previous) do
-        if curr_idx <= #lines and lines[curr_idx] == prev_line then
-            new_entries[#new_entries + 1] = current_entries[prev_idx]
-            curr_idx = curr_idx + 1
+    for idx, entry in ipairs(current_entries) do
+        local line_idx = idx - 1
+        local in_prefix = line_idx < firstline
+        local in_kept_range = line_idx >= firstline and line_idx < (firstline + keep_in_range)
+        local in_suffix = line_idx >= lastline
+        if in_prefix or in_kept_range or in_suffix then
+            new_entries[#new_entries + 1] = entry
         end
     end
     return new_entries
 end
 
-local function on_changed(bufnr)
+local function update_dirty(bufnr, lines, current_entries)
     local orig_entries = vim.b[bufnr].csub_orig_qflist or {}
-    local current_entries = vim.b[bufnr].csub_current_entries or orig_entries
-    local lines = buf_get_lines(bufnr, 0, -1, false)
-    local previous = vim.b[bufnr].csub_lines or lines
 
-    -- Reject additions (more lines than original)
-    if #lines > #orig_entries then
+    local dirty = (#lines ~= #orig_entries) or (#current_entries ~= #orig_entries)
+    if not dirty then
+        for idx, entry in ipairs(orig_entries) do
+            if lines[idx] ~= utils.chomp(entry.text) then
+                dirty = true
+                break
+            end
+        end
+    end
+
+    vim.b[bufnr].csub_dirty = dirty
+end
+
+local function on_lines(bufnr, firstline, lastline, new_lastline)
+    if not buf_is_valid(bufnr) or vim.b[bufnr].csub_updating then
+        return
+    end
+
+    local previous_lines = vim.b[bufnr].csub_lines or {}
+    local previous_entries = vim.b[bufnr].csub_current_entries
+        or vim.b[bufnr].csub_orig_qflist
+        or {}
+    local previous_dirty = vim.b[bufnr].csub_dirty or false
+    local delta = new_lastline - lastline
+
+    -- Reject additions (more buffer lines than quickfix entries)
+    if delta > 0 then
         vim.schedule(function()
             if not buf_is_valid(bufnr) then return end
-            buf_set_lines(bufnr, 0, -1, false, previous)
-            set_metadata(bufnr, current_entries)
+
+            vim.b[bufnr].csub_updating = true
+            buf_set_lines(bufnr, 0, -1, false, previous_lines)
+            vim.b[bufnr].csub_updating = false
+
+            vim.b[bufnr].csub_current_entries = previous_entries
+            vim.b[bufnr].csub_lines = previous_lines
+            vim.b[bufnr].csub_dirty = previous_dirty
+            set_metadata(bufnr, previous_entries)
             utils.silence_modified(bufnr)
             vim.notify("[csub] Cannot add lines beyond quickfix entries.", vim.log.levels.WARN)
         end)
         return
     end
 
-    -- Update current_entries if lines were deleted
-    if #lines < #previous then
-        current_entries = remove_deleted_entries(current_entries, previous, lines)
+    local current_entries = previous_entries
+    if delta < 0 then
+        current_entries = shrink_entry_range(previous_entries, firstline, lastline, new_lastline)
         vim.b[bufnr].csub_current_entries = current_entries
     end
 
+    local lines = buf_get_lines(bufnr, 0, -1, false)
     vim.b[bufnr].csub_lines = lines
     set_metadata(bufnr, current_entries)
+    update_dirty(bufnr, lines, current_entries)
     utils.silence_modified(bufnr)
 end
 
-function M.populate(bufnr, qflist, mode)
-    qflist = qflist or {}
-    vim.b[bufnr].csub_orig_qflist = qflist
-    vim.b[bufnr].csub_current_entries = vim.deepcopy(qflist)
+function M.populate(bufnr, qflist, mode, opts)
+    opts = opts or {}
+
+    local orig_entries = clone_entries(qflist)
+    local current_entries = vim.deepcopy(orig_entries, true)
+
+    vim.b[bufnr].csub_orig_qflist = orig_entries
+    vim.b[bufnr].csub_current_entries = current_entries
     vim.b[bufnr].csub_mode = mode or "replace"
+    vim.b[bufnr].csub_qf_id = opts.qf_id
 
     -- Pre-allocate table with known size
     local lines = {}
-    for i, entry in ipairs(qflist) do
+    for i, entry in ipairs(current_entries) do
         lines[i] = utils.chomp(entry.text)
     end
 
+    vim.b[bufnr].csub_updating = true
     vim.bo[bufnr].modifiable = true
     buf_set_lines(bufnr, 0, -1, false, lines)
-    set_metadata(bufnr, qflist)
+    vim.b[bufnr].csub_updating = false
+
+    set_metadata(bufnr, current_entries)
     vim.b[bufnr].csub_lines = lines
+    vim.b[bufnr].csub_dirty = false
     vim.bo[bufnr].modified = false
 end
 
@@ -159,10 +214,9 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
             on_write(bufnr, vim.b[bufnr].csub_qf_winid, vim.b[bufnr].csub_qf_bufnr)
         end,
     })
-    create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP" }, {
-        buffer = bufnr,
-        callback = function()
-            on_changed(bufnr)
+    buf_attach(bufnr, false, {
+        on_lines = function(_, changed_bufnr, _, firstline, lastline, new_lastline)
+            on_lines(changed_bufnr, firstline, lastline, new_lastline)
         end,
     })
     create_autocmd("BufWinEnter", {
