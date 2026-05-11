@@ -13,6 +13,7 @@ beside each entry to keep context while editing.
 Different modes allow csub to behave appropriately based on the quickfix source:
 - "replace" mode: Edit text to replace lines in source files (grep, make)
 - "buffers" mode: Delete lines to close buffers (buffer pickers)
+- "files" mode: Create, rename, or delete files and folders (file listings)
 
 ==============================================================================
 SETUP                                                              *csub-setup*
@@ -66,7 +67,7 @@ handlers ~
     List of handler tables to detect mode based on quickfix title. Each handler
     has two fields:
     - `match`: String to match against the quickfix list title (plain text)
-    - `mode`: Mode to use when matched ("replace", "buffers", or nil)
+    - `mode`: Mode to use when matched ("replace", "buffers", "files", or nil)
 
     Handlers are checked in order; the first match wins.
 
@@ -90,6 +91,20 @@ csub supports different modes that change behavior on save:
     - Use case: Buffer pickers that populate quickfix
     - Use `:w!` to force-close modified buffers
 
+"files"                                                        *csub-mode-files*
+    - Delete line: Delete the file (or folder, recursively)
+    - Edit line: Rename the file or folder; if a buffer is open for the old
+      path it is renamed via |nvim_buf_set_name()| so unsaved edits follow
+    - Add line: Create an empty file; trailing `/` creates a folder. Parent
+      folders are created as needed.
+    - Use case: Editing a quickfix list of file paths (e.g. from a file
+      picker, `find`, or a custom command)
+    - Plain `:w` refuses to apply destructive operations (deletes and any
+      operation that would overwrite an existing path) and lists them via
+      |vim.notify()|. Use `:w!` to commit.
+    - Folder renames do not propagate to open buffers for descendant files;
+      only paths that appear as their own quickfix entries are tracked.
+
 nil                                                         *csub-mode-disabled*
     - Disables csub for matching quickfix lists
     - `:Csub` will show a message and do nothing
@@ -108,6 +123,8 @@ NOTES                                                              *csub-notes*
   reported and that entry is left unchanged.
 - Mode is detected from the quickfix title when `:Csub` is invoked.
 - In "buffers" mode, only line deletions have an effect; text edits are ignored.
+- In "files" mode, the metadata column is suppressed because line/column
+  information is not meaningful for file paths.
 
 ==============================================================================
 LICENSE                                                          *csub-license*

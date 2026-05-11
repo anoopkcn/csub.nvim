@@ -5,7 +5,7 @@ local buf_get_name = vim.api.nvim_buf_get_name
 
 M.META_WIDTH = 50
 
-local function normalize_name(entry)
+function M.normalize_name(entry)
     local name = ""
     if entry.bufnr and entry.bufnr ~= 0 then
         name = buf_get_name(entry.bufnr)
@@ -20,6 +20,8 @@ local function normalize_name(entry)
     end
     return name
 end
+
+local normalize_name = M.normalize_name
 
 local function truncate_path(path, max_width)
     if #path <= max_width then

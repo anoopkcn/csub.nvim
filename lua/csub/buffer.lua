@@ -20,16 +20,22 @@ local ns = vim.api.nvim_create_namespace("csub_meta")
 
 local M = {}
 
-local function clone_entries(qflist)
+local function clone_entries(qflist, mode)
     local entries = vim.deepcopy(qflist or {}, true)
     for i, entry in ipairs(entries) do
         entry._csub_id = i
+        if mode == "files" then
+            entry._csub_path = fmt.normalize_name(entry)
+        end
     end
     return entries
 end
 
-local function set_metadata(bufnr, entries)
+local function set_metadata(bufnr, entries, mode)
     buf_clear_namespace(bufnr, ns, 0, -1)
+    if mode == "files" then
+        return
+    end
     local line_count = buf_line_count(bufnr)
     for idx, entry in ipairs(entries) do
         if idx > line_count then break end
@@ -61,13 +67,44 @@ local function shrink_entry_range(current_entries, firstline, lastline, new_last
     return new_entries
 end
 
-local function update_dirty(bufnr, lines, current_entries)
+local function grow_entry_range(current_entries, firstline, lastline, new_lastline)
+    if new_lastline <= lastline then
+        return current_entries
+    end
+    local delta = new_lastline - lastline
+    local new_entries = {}
+    -- Prefix: entries before the change region
+    for idx = 1, firstline do
+        new_entries[#new_entries + 1] = current_entries[idx]
+    end
+    -- Original entries within [firstline, lastline) are kept in place
+    for idx = firstline + 1, lastline do
+        new_entries[#new_entries + 1] = current_entries[idx]
+    end
+    -- Inserted synthetic entries for the new lines
+    for _ = 1, delta do
+        new_entries[#new_entries + 1] = { _csub_new = true }
+    end
+    -- Suffix
+    for idx = lastline + 1, #current_entries do
+        new_entries[#new_entries + 1] = current_entries[idx]
+    end
+    return new_entries
+end
+
+local function update_dirty(bufnr, lines, current_entries, mode)
     local orig_entries = vim.b[bufnr].csub_orig_qflist or {}
 
     local dirty = (#lines ~= #orig_entries) or (#current_entries ~= #orig_entries)
     if not dirty then
         for idx, entry in ipairs(orig_entries) do
-            if lines[idx] ~= utils.chomp(entry.text) then
+            local baseline
+            if mode == "files" then
+                baseline = entry._csub_path or ""
+            else
+                baseline = utils.chomp(entry.text)
+            end
+            if lines[idx] ~= baseline then
                 dirty = true
                 break
             end
@@ -82,6 +119,7 @@ local function on_lines(bufnr, firstline, lastline, new_lastline)
         return
     end
 
+    local mode = vim.b[bufnr].csub_mode or "replace"
     local previous_lines = vim.b[bufnr].csub_lines or {}
     local previous_entries = vim.b[bufnr].csub_current_entries
         or vim.b[bufnr].csub_orig_qflist
@@ -89,8 +127,9 @@ local function on_lines(bufnr, firstline, lastline, new_lastline)
     local previous_dirty = vim.b[bufnr].csub_dirty or false
     local delta = new_lastline - lastline
 
-    -- Reject additions (more buffer lines than quickfix entries)
-    if delta > 0 then
+    -- Reject additions in modes that require 1:1 line/entry mapping.
+    -- Files mode allows additions (they become create operations).
+    if delta > 0 and mode ~= "files" then
         vim.schedule(function()
             if not buf_is_valid(bufnr) then return end
 
@@ -101,7 +140,7 @@ local function on_lines(bufnr, firstline, lastline, new_lastline)
             vim.b[bufnr].csub_current_entries = previous_entries
             vim.b[bufnr].csub_lines = previous_lines
             vim.b[bufnr].csub_dirty = previous_dirty
-            set_metadata(bufnr, previous_entries)
+            set_metadata(bufnr, previous_entries, mode)
             utils.silence_modified(bufnr)
             vim.notify("[csub] Cannot add lines beyond quickfix entries.", vim.log.levels.WARN)
         end)
@@ -112,30 +151,38 @@ local function on_lines(bufnr, firstline, lastline, new_lastline)
     if delta < 0 then
         current_entries = shrink_entry_range(previous_entries, firstline, lastline, new_lastline)
         vim.b[bufnr].csub_current_entries = current_entries
+    elseif delta > 0 then
+        current_entries = grow_entry_range(previous_entries, firstline, lastline, new_lastline)
+        vim.b[bufnr].csub_current_entries = current_entries
     end
 
     local lines = buf_get_lines(bufnr, 0, -1, false)
     vim.b[bufnr].csub_lines = lines
-    set_metadata(bufnr, current_entries)
-    update_dirty(bufnr, lines, current_entries)
+    set_metadata(bufnr, current_entries, mode)
+    update_dirty(bufnr, lines, current_entries, mode)
     utils.silence_modified(bufnr)
 end
 
 function M.populate(bufnr, qflist, mode, opts)
     opts = opts or {}
+    mode = mode or "replace"
 
-    local orig_entries = clone_entries(qflist)
+    local orig_entries = clone_entries(qflist, mode)
     local current_entries = vim.deepcopy(orig_entries, true)
 
     vim.b[bufnr].csub_orig_qflist = orig_entries
     vim.b[bufnr].csub_current_entries = current_entries
-    vim.b[bufnr].csub_mode = mode or "replace"
+    vim.b[bufnr].csub_mode = mode
     vim.b[bufnr].csub_qf_id = opts.qf_id
 
     -- Pre-allocate table with known size
     local lines = {}
     for i, entry in ipairs(current_entries) do
-        lines[i] = utils.chomp(entry.text)
+        if mode == "files" then
+            lines[i] = entry._csub_path or ""
+        else
+            lines[i] = utils.chomp(entry.text)
+        end
     end
 
     vim.b[bufnr].csub_updating = true
@@ -143,7 +190,7 @@ function M.populate(bufnr, qflist, mode, opts)
     buf_set_lines(bufnr, 0, -1, false, lines)
     vim.b[bufnr].csub_updating = false
 
-    set_metadata(bufnr, current_entries)
+    set_metadata(bufnr, current_entries, mode)
     vim.b[bufnr].csub_lines = lines
     vim.b[bufnr].csub_dirty = false
     vim.bo[bufnr].modified = false

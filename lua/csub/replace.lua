@@ -57,6 +57,8 @@ local function strip_internal_fields(entries)
     for _, entry in ipairs(entries) do
         entry._csub_deleted = nil
         entry._csub_id = nil
+        entry._csub_path = nil
+        entry._csub_new = nil
     end
     return entries
 end
@@ -140,14 +142,174 @@ local function apply_buffers(qf_orig, current_entries)
     end
 end
 
+local function resolve_abs(path)
+    if path == nil or path == "" then return path end
+    if path:sub(1, 1) == "/" then return path end
+    local cwd = vim.uv.cwd() or ""
+    return vim.fs.joinpath(cwd, path)
+end
+
+local function find_buf_for_path(path)
+    if not path or path == "" then return -1 end
+    local bnr = vim.fn.bufnr(path)
+    if bnr ~= -1 and buf_is_valid(bnr) then return bnr end
+    local resolved = vim.uv.fs_realpath(path)
+    if resolved and resolved ~= path then
+        bnr = vim.fn.bufnr(resolved)
+        if bnr ~= -1 and buf_is_valid(bnr) then return bnr end
+    end
+    return -1
+end
+
+--- Apply changes in "files" mode: create/rename/delete files and folders.
+--- Returns true on success, false if refused (destructive ops pending without :w!).
+local function apply_files(qf_orig, current_entries, new_text_lines, bang)
+    local current_ids = {}
+    for _, e in ipairs(current_entries) do
+        if e._csub_id then current_ids[e._csub_id] = true end
+    end
+
+    local deletes, renames, creates = {}, {}, {}
+
+    for _, entry in ipairs(qf_orig) do
+        if entry._csub_id and not current_ids[entry._csub_id] then
+            local old_rel = entry._csub_path or ""
+            local old_abs = resolve_abs(old_rel)
+            deletes[#deletes + 1] = {
+                entry = entry,
+                rel = old_rel,
+                abs = old_abs,
+                is_dir = old_abs and vim.fn.isdirectory(old_abs) == 1,
+            }
+        end
+    end
+
+    for line_idx, entry in ipairs(current_entries) do
+        local line = new_text_lines[line_idx] or ""
+        if entry._csub_new then
+            if line ~= "" then
+                local abs = resolve_abs(line)
+                local is_folder = line:sub(-1) == "/"
+                creates[#creates + 1] = {
+                    entry = entry,
+                    rel = line,
+                    abs = abs,
+                    is_folder = is_folder,
+                    overwrite = not is_folder and vim.uv.fs_stat(abs) ~= nil,
+                }
+            end
+        elseif entry._csub_id then
+            local old_rel = entry._csub_path or ""
+            if line ~= "" and line ~= old_rel then
+                local old_abs = resolve_abs(old_rel)
+                local new_abs = resolve_abs(line)
+                renames[#renames + 1] = {
+                    entry = entry,
+                    old_rel = old_rel,
+                    old_abs = old_abs,
+                    new_rel = line,
+                    new_abs = new_abs,
+                    overwrite = new_abs ~= old_abs and vim.uv.fs_stat(new_abs) ~= nil,
+                    is_dir = old_abs and vim.fn.isdirectory(old_abs) == 1,
+                }
+            end
+        end
+    end
+
+    if not bang then
+        local destructive = {}
+        for _, op in ipairs(deletes) do
+            destructive[#destructive + 1] = string.format("delete %s%s",
+                op.rel, op.is_dir and "/" or "")
+        end
+        for _, op in ipairs(renames) do
+            if op.overwrite then
+                destructive[#destructive + 1] = string.format("overwrite %s → %s",
+                    op.old_rel, op.new_rel)
+            end
+        end
+        for _, op in ipairs(creates) do
+            if op.overwrite then
+                destructive[#destructive + 1] = string.format("overwrite %s", op.rel)
+            end
+        end
+        if #destructive > 0 then
+            vim.notify("[csub] Use :w! to apply: " .. table.concat(destructive, ", "),
+                vim.log.levels.WARN)
+            return false
+        end
+    end
+
+    for _, op in ipairs(deletes) do
+        local flags = op.is_dir and "rf" or ""
+        local rc = vim.fn.delete(op.abs, flags)
+        if rc == -1 then
+            utils.echoerr(("csub: Failed to delete %s"):format(op.rel))
+        else
+            op.entry._csub_deleted = true
+            local bnr = find_buf_for_path(op.abs)
+            if bnr ~= -1 then
+                pcall(vim.cmd.bdelete, { args = { bnr }, bang = true })
+            end
+        end
+    end
+
+    for _, op in ipairs(renames) do
+        local parent = vim.fs.dirname(op.new_abs)
+        if parent and parent ~= "" then
+            vim.fn.mkdir(parent, "p")
+        end
+        local rc = vim.fn.rename(op.old_abs, op.new_abs)
+        if rc ~= 0 then
+            utils.echoerr(("csub: Failed to rename %s → %s"):format(op.old_rel, op.new_rel))
+        else
+            local old_bnr = find_buf_for_path(op.old_abs)
+            if old_bnr ~= -1 then
+                pcall(vim.api.nvim_buf_set_name, old_bnr, op.new_abs)
+                pcall(vim.cmd.checktime, old_bnr)
+            end
+            op.entry._csub_path = op.new_rel
+            op.entry.filename = op.new_abs
+            op.entry.bufnr = nil
+            op.entry.text = op.new_rel
+        end
+    end
+
+    for _, op in ipairs(creates) do
+        local parent = vim.fs.dirname(op.abs)
+        if parent and parent ~= "" then
+            vim.fn.mkdir(parent, "p")
+        end
+        local ok
+        if op.is_folder then
+            ok = pcall(vim.fn.mkdir, op.abs, "p")
+        else
+            ok = pcall(vim.fn.writefile, {}, op.abs)
+        end
+        if not ok then
+            utils.echoerr(("csub: Failed to create %s"):format(op.rel))
+        else
+            op.entry._csub_new = nil
+            op.entry._csub_path = op.rel
+            op.entry.filename = op.abs
+            op.entry.text = op.rel
+            op.entry.lnum = op.entry.lnum or 1
+            op.entry.col = op.entry.col or 1
+        end
+    end
+
+    return true
+end
+
 function M.apply(bufnr, winid, qf_bufnr)
     local qf_stored = vim.b[bufnr].csub_orig_qflist or {}
     local current_entries = vim.b[bufnr].csub_current_entries or qf_stored
     local mode = vim.b[bufnr].csub_mode or "replace"
     local qf_orig = vim.deepcopy(qf_stored, true)
+    local current_copy = vim.deepcopy(current_entries, true)
     local new_text_lines = buf_get_lines(bufnr, 0, -1, false)
 
-    if #new_text_lines > #qf_orig then
+    if mode ~= "files" and #new_text_lines > #qf_orig then
         utils.echoerr(("csub: Cannot add lines (quickfix: %d, buffer: %d)"):format(#qf_orig, #new_text_lines))
         return
     end
@@ -156,18 +318,28 @@ function M.apply(bufnr, winid, qf_bufnr)
         and win_get_cursor(winid)[1] or 1
     local saved_view = view.save(winid, bufnr)
 
-    vim.bo[bufnr].modified = false
-
-    if mode == "buffers" then
-        apply_buffers(qf_orig, current_entries)
+    local filtered_qf
+    if mode == "files" then
+        local ok = apply_files(qf_orig, current_copy, new_text_lines, vim.v.cmdbang == 1)
+        if not ok then
+            return
+        end
+        vim.bo[bufnr].modified = false
+        filtered_qf = vim.iter(current_copy):filter(function(e)
+            return not e._csub_deleted and not e._csub_new
+        end):totable()
     else
-        apply_replace(qf_orig, current_entries, new_text_lines)
+        vim.bo[bufnr].modified = false
+        if mode == "buffers" then
+            apply_buffers(qf_orig, current_entries)
+        else
+            apply_replace(qf_orig, current_entries, new_text_lines)
+        end
+        filtered_qf = vim.iter(qf_orig):filter(function(e)
+            return not e._csub_deleted
+        end):totable()
     end
 
-    -- vim.iter available in 0.10+
-    local filtered_qf = vim.iter(qf_orig):filter(function(e)
-        return not e._csub_deleted
-    end):totable()
     local qf_for_write = strip_internal_fields(vim.deepcopy(filtered_qf, true))
     vim.fn.setqflist(qf_for_write, "r")
 

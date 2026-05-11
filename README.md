@@ -7,7 +7,7 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 - Shows file/line/col metadata as virtual text beside each entry
 - Applies changes to the underlying files and quickfix list on write
 - Run `:Csub` to switch back and forth between the quickfix list and the csub buffer
-- Supports different modes based on quickfix source (text replacement, buffer management)
+- Supports different modes based on quickfix source (text replacement, buffer management, file operations)
 
 **Example: Find and Replace**
 - Use as a replacement for `:cfdo` and `:cdo`(Find and replace across multiple files)
@@ -18,6 +18,10 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 **Example: Buffer Management**
 - Configure csub to close buffers when using a buffer picker that populates the quickfix list
 - Delete lines in the csub buffer to close the corresponding buffers
+
+**Example: File Operations**
+- Configure csub to operate on files when the quickfix list contains file paths
+- Edit a line to rename, delete a line to remove, add a line to create (trailing `/` for folders)
 
 ## Requirements
 - Neovim 0.12 or higher
@@ -78,14 +82,16 @@ Handlers allow csub to behave differently based on what command created the quic
 
 ### Modes
 
-| Mode | Delete line | Edit text | Use case |
-|------|-------------|-----------|----------|
-| `"replace"` | Remove from QF | Replace line in file | Grep results, compiler errors |
-| `"buffers"` | Close buffer (`:bdelete`) | Ignored | Buffer pickers |
-| `nil` | - | - | Disable csub for this QF |
+| Mode | Delete line | Edit text | Add line | Use case |
+|------|-------------|-----------|----------|----------|
+| `"replace"` | Remove from QF | Replace line in file | Rejected | Grep results, compiler errors |
+| `"buffers"` | Close buffer (`:bdelete`) | Ignored | Rejected | Buffer pickers |
+| `"files"` | Delete file/folder | Rename file/folder | Create file (trailing `/` = folder) | File listings |
+| `nil` | - | - | - | Disable csub for this QF |
 
 **Notes:**
 - In `"buffers"` mode, use `:w!` to force-close modified buffers
+- In `"files"` mode, plain `:w` refuses to apply destructive operations (deletes and overwrites) and lists them; use `:w!` to commit
 - The mode is detected from the quickfix title when `:Csub` is invoked
 
 ## Usage
