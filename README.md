@@ -64,9 +64,10 @@ require("csub").setup({
     -- Handlers to detect mode based on quickfix title
     handlers = {
         { match = "FuzzyBuffers", mode = "buffers" },
-        { match = "FuzzyFiles",   mode = nil },      -- disable csub
+        { match = "FuzzyFiles",   mode = "files"   },
         { match = "Grep",         mode = "replace" },
         { match = "vimgrep",      mode = "replace" },
+        { match = "Diagnostics",  mode = nil       }, -- disable csub
     },
 
     -- Fallback mode when no handler matches (default: "replace")
@@ -95,11 +96,11 @@ Handlers allow csub to behave differently based on what command created the quic
 - The mode is detected from the quickfix title when `:Csub` is invoked
 
 ## Usage
-1. Populate a quickfix list (e.g. `:make`, `:grep`, diagnostics).
+1. Populate a quickfix list (e.g. `:make`, `:grep`, diagnostics, a file picker).
 2. Run `:Csub` to open the list in the existing quickfix window for editing.
-3. Edit the lines directly. Deleting a line removes that quickfix entry; adding lines is rejected.
+3. Edit the lines directly. Deleting a line removes that quickfix entry. Adding lines is rejected in `replace` and `buffers` modes; in `files` mode new lines become file/folder creations.
 4. Run `:Csub` again at any point to toggle back to the quickfix window without discarding unsaved edits.
-5. Write (`:w`) to apply changes back to the underlying files and quickfix list; the view jumps back to the quickfix list.
+5. Write (`:w`) to apply changes back to the underlying files and quickfix list; the view jumps back to the quickfix list. In `files` mode, use `:w!` to commit destructive operations (deletes, overwrites).
 
 **NOTE: closing the csub buffer without writing discards all changes.**
 
@@ -109,8 +110,9 @@ vim.keymap.set("n", "<leader>s", "<cmd>Csub<cr>", { desc = "Csub the current qui
 ```
 
 ## Notes
-- Metadata is virtual text; line wrapping is disabled locally.
+- Metadata is virtual text; line wrapping is disabled locally. In `files` mode the metadata column is omitted because line/column information is not meaningful for paths.
 - If the target line changed since the quickfix list was built and differs from your edit, the plug-in reports an error and leaves that entry untouched.
+- In `files` mode, renaming a file whose buffer is currently loaded also renames the buffer (unsaved edits follow). Folder renames do not propagate to open buffers for descendant files unless those descendants appear as their own quickfix entries.
 
 ## Help
 
