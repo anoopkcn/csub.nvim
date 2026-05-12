@@ -341,10 +341,14 @@ function M.apply(bufnr, winid, qf_bufnr)
     end
 
     local qf_for_write = strip_internal_fields(vim.deepcopy(filtered_qf, true))
-    vim.fn.setqflist(qf_for_write, "r")
+    -- Target the qf list by id and use the dict form so the title and context
+    -- are preserved. The bare setqflist({list}, "r") form clobbers the title
+    -- to ":setqflist()", which then breaks mode detection on the next :Csub.
+    local target_id = vim.b[bufnr].csub_qf_id or vim.fn.getqflist({ id = 0 }).id
+    vim.fn.setqflist({}, "r", { id = target_id, items = qf_for_write })
 
-    local qf_info = vim.fn.getqflist({ id = 0, qfbufnr = 1 })
-    local qf_id = qf_info and qf_info.id or vim.b[bufnr].csub_qf_id
+    local qf_info = vim.fn.getqflist({ id = target_id, qfbufnr = 1 })
+    local qf_id = qf_info and qf_info.id or target_id
     buffer.populate(bufnr, filtered_qf, mode, { qf_id = qf_id })
 
     local target_qfbuf = qf_info and qf_info.qfbufnr or qf_bufnr
