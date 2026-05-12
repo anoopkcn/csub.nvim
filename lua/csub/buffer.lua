@@ -20,12 +20,30 @@ local ns = vim.api.nvim_create_namespace("csub_meta")
 
 local M = {}
 
+local function file_path_with_kind(path)
+    -- Append a trailing slash for directories so users can distinguish them
+    -- from regular files at a glance.
+    if not path or path == "" or path:sub(-1) == "/" then
+        return path
+    end
+    local abs
+    if path:sub(1, 1) == "/" then
+        abs = path
+    else
+        abs = vim.fs.joinpath(vim.uv.cwd() or "", path)
+    end
+    if vim.fn.isdirectory(abs) == 1 then
+        return path .. "/"
+    end
+    return path
+end
+
 local function clone_entries(qflist, mode)
     local entries = vim.deepcopy(qflist or {}, true)
     for i, entry in ipairs(entries) do
         entry._csub_id = i
         if mode == "files" then
-            entry._csub_path = fmt.normalize_name(entry)
+            entry._csub_path = file_path_with_kind(fmt.normalize_name(entry))
         end
     end
     return entries

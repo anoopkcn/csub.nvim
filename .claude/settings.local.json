@@ -7,7 +7,9 @@
       "Bash(git -C /Users/akc/develop/csub.nvim diff 770ed8b e26689f --stat)",
       "Bash(rtk ls *)",
       "Bash(rtk find *)",
-      "Bash(rtk grep *)"
+      "Bash(rtk grep *)",
+      "Read(//private/tmp/csub_test/**)",
+      "Bash(nvim --headless -u NONE -l test_subpath.lua)"
     ]
   }
 }

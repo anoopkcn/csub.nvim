@@ -139,6 +139,12 @@ csub supports different modes that change behavior on save:
       folders are created as needed.
     - Use case: Editing a quickfix list of file paths (e.g. from a file
       picker, `find`, or a custom command)
+    - Folders are displayed with a trailing `/` so they can be distinguished
+      from regular files at a glance.
+    - To add a new file inside an existing folder, insert a new line for the
+      file's full path (e.g. `o` then `mydir/new.txt`). Editing the folder's
+      own line to a path inside it is rejected with a clear message, since
+      that operation would mean renaming a folder into its own subpath.
     - Plain `:w` refuses to apply destructive operations (deletes and any
       operation that would overwrite an existing path) and lists them via
       |vim.notify()|. Use `:w!` to commit.

@@ -149,6 +149,13 @@ local function resolve_abs(path)
     return vim.fs.joinpath(cwd, path)
 end
 
+local function strip_trailing_slash(s)
+    if s and #s > 1 and s:sub(-1) == "/" then
+        return s:sub(1, -2)
+    end
+    return s
+end
+
 local function find_buf_for_path(path)
     if not path or path == "" then return -1 end
     local bnr = vim.fn.bufnr(path)
@@ -219,8 +226,7 @@ local function apply_files(qf_orig, current_entries, new_text_lines, bang)
     if not bang then
         local destructive = {}
         for _, op in ipairs(deletes) do
-            destructive[#destructive + 1] = string.format("delete %s%s",
-                op.rel, op.is_dir and "/" or "")
+            destructive[#destructive + 1] = "delete " .. op.rel
         end
         for _, op in ipairs(renames) do
             if op.overwrite then
@@ -255,24 +261,36 @@ local function apply_files(qf_orig, current_entries, new_text_lines, bang)
     end
 
     for _, op in ipairs(renames) do
-        local parent = vim.fs.dirname(op.new_abs)
+        local old_fs = strip_trailing_slash(op.old_abs)
+        local new_fs = strip_trailing_slash(op.new_abs)
+        -- Reject renaming a path into itself or its own descendant. POSIX
+        -- rename(2) returns EINVAL for this; we catch it ahead of time to
+        -- give a clearer message — the user almost certainly meant to add a
+        -- new line for the target rather than overwrite the existing entry.
+        if new_fs == old_fs or new_fs:sub(1, #old_fs + 1) == (old_fs .. "/") then
+            utils.echoerr(("csub: Cannot rename %s into its own subpath %s. To create '%s' inside this folder, insert a new line instead of editing this one."):format(
+                op.old_rel, op.new_rel, op.new_rel))
+            goto continue_renames
+        end
+        local parent = vim.fs.dirname(new_fs)
         if parent and parent ~= "" then
             vim.fn.mkdir(parent, "p")
         end
-        local rc = vim.fn.rename(op.old_abs, op.new_abs)
+        local rc = vim.fn.rename(old_fs, new_fs)
         if rc ~= 0 then
             utils.echoerr(("csub: Failed to rename %s → %s"):format(op.old_rel, op.new_rel))
         else
-            local old_bnr = find_buf_for_path(op.old_abs)
+            local old_bnr = find_buf_for_path(old_fs)
             if old_bnr ~= -1 then
-                pcall(vim.api.nvim_buf_set_name, old_bnr, op.new_abs)
+                pcall(vim.api.nvim_buf_set_name, old_bnr, new_fs)
                 pcall(vim.cmd.checktime, old_bnr)
             end
             op.entry._csub_path = op.new_rel
-            op.entry.filename = op.new_abs
+            op.entry.filename = new_fs
             op.entry.bufnr = nil
             op.entry.text = op.new_rel
         end
+        ::continue_renames::
     end
 
     for _, op in ipairs(creates) do

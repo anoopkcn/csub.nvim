@@ -22,6 +22,7 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 **Example: File Operations**
 - Configure csub to operate on files when the quickfix list contains file paths
 - Edit a line to rename, delete a line to remove, add a line to create (trailing `/` for folders)
+- Folders are displayed with a trailing `/`; to add a file inside one, insert a new line for the full path rather than editing the folder's own line
 
 ## Requirements
 - Neovim 0.12 or higher
