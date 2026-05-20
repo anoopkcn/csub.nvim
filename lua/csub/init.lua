@@ -1,8 +1,19 @@
-local buffer = require("csub.buffer")
-local fmt = require("csub.format")
-local replace = require("csub.replace")
-local view = require("csub.view")
-local window = require("csub.window")
+-- Lazy-require submodules so they only load on first :Csub / first quickfix event.
+local function lazy_require(name)
+    local m
+    return setmetatable({}, {
+        __index = function(_, k)
+            m = m or require(name)
+            return m[k]
+        end,
+    })
+end
+
+local buffer = lazy_require("csub.buffer")
+local fmt = lazy_require("csub.format")
+local replace = lazy_require("csub.replace")
+local view = lazy_require("csub.view")
+local window = lazy_require("csub.window")
 
 -- Cache frequently used API functions
 local buf_is_valid = vim.api.nvim_buf_is_valid
@@ -15,10 +26,6 @@ local set_current_win = vim.api.nvim_set_current_win
 local buf_clear_namespace = vim.api.nvim_buf_clear_namespace
 local buf_set_extmark = vim.api.nvim_buf_set_extmark
 local create_namespace = vim.api.nvim_create_namespace
-local create_autocmd = vim.api.nvim_create_autocmd
-local create_augroup = vim.api.nvim_create_augroup
-local create_user_command = vim.api.nvim_create_user_command
-local set_hl = vim.api.nvim_set_hl
 
 local M = {}
 
@@ -179,6 +186,12 @@ function M.quickfix_text(info)
     return fmt.quickfix_text(info)
 end
 
+-- Internal entry point for plugin/csub.lua autocommands.
+M._highlight_qf_buffer = highlight_qf_buffer
+
+-- Optional: override defaults. The plugin works without calling this; the
+-- :Csub command, quickfixtextfunc, autocommands, and highlight groups are
+-- registered automatically by plugin/csub.lua at startup.
 function M.setup(opts)
     opts = opts or {}
 
@@ -189,51 +202,6 @@ function M.setup(opts)
     if opts.default_mode ~= nil then
         config.default_mode = opts.default_mode
     end
-
-    vim.o.quickfixtextfunc = "v:lua.require'csub'.quickfix_text"
-
-    -- default=true only sets the highlight if it doesn't already exist
-    set_hl(0, "CsubSeparator", { link = "Comment", default = true })
-    set_hl(0, "CsubMetaFileName", { link = "Comment", default = true })
-    set_hl(0, "CsubMetaNumber", { link = "Number", default = true })
-
-    -- Create autocommand group for organized cleanup
-    local augroup = create_augroup("csub", { clear = true })
-
-    -- Set nowrap for quickfix and csub windows
-    create_autocmd("FileType", {
-        group = augroup,
-        pattern = { "qf", "csub" },
-        callback = function()
-            vim.wo.wrap = false
-        end,
-    })
-
-    -- Apply extmark highlights to quickfix buffer
-    create_autocmd("QuickFixCmdPost", {
-        group = augroup,
-        pattern = "*",
-        callback = function()
-            vim.schedule(highlight_qf_buffer)
-        end,
-    })
-
-    -- Reapply highlights when quickfix window is opened
-    create_autocmd("BufWinEnter", {
-        group = augroup,
-        callback = function(args)
-            if vim.bo[args.buf].buftype == "quickfix" then
-                vim.schedule(highlight_qf_buffer)
-            end
-        end,
-    })
-
-    create_user_command("Csub", function()
-        M.start()
-    end, {
-        desc = "Toggle an editable quickfix buffer",
-        nargs = 0,
-    })
 end
 
 return M

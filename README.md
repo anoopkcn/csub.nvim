@@ -30,35 +30,33 @@ Edit the current quickfix list in a scratch buffer. Write the buffer to push the
 
 ## Installation
 
+The plugin works out of the box — no `setup()` call required. The `:Csub` command, the quickfix metadata column, and the highlight groups are registered automatically at startup by `plugin/csub.lua`.
+
 vim.pack example (Neovim 0.12+):
 ```lua
 vim.pack.add({"https://github.com/anoopkcn/csub.nvim"})
-require("csub").setup()
 ```
 
-Lazy.nvim example:
+Lazy.nvim example (zero-config):
 ```lua
-{
-  "https://github.com/anoopkcn/csub.nvim",
-  config = function()
-    require("csub").setup()
-  end,
-}
+{ "https://github.com/anoopkcn/csub.nvim" }
 ```
+
+Lazy.nvim example (deferred until the first quickfix command — recommended for true lazy loading):
+```lua
+{ "https://github.com/anoopkcn/csub.nvim", event = "QuickFixCmdPre" }
+```
+
+`cmd = { "Csub" }` is also possible, but with that trigger any quickfix list opened before the first `:Csub` will not get csub's metadata column — the plugin's `quickfixtextfunc` only takes effect once it's loaded.
 
 Packer.nvim example:
 ```lua
-use({
-  "https://github.com/anoopkcn/csub.nvim",
-  config = function()
-    require("csub").setup()
-  end,
-})
+use({ "https://github.com/anoopkcn/csub.nvim" })
 ```
 
 ## Configuration
 
-The `setup()` function accepts an optional table:
+`require("csub").setup(opts)` is optional. Call it only if you want to override the defaults:
 
 ```lua
 require("csub").setup({
@@ -74,6 +72,16 @@ require("csub").setup({
     -- Fallback mode when no handler matches (default: "replace")
     default_mode = "replace",
 })
+```
+
+With lazy.nvim, the usual wiring works:
+```lua
+{
+  "https://github.com/anoopkcn/csub.nvim",
+  config = function()
+    require("csub").setup({ default_mode = "files" })
+  end,
+}
 ```
 
 ### Handlers

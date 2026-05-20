@@ -19,15 +19,12 @@ Different modes allow csub to behave appropriately based on the quickfix source:
 ==============================================================================
 SETUP                                                              *csub-setup*
 
-Load the module and call `setup()` once (Lua):
+No setup call is required. The `:Csub` command, the `quickfixtextfunc`, the
+augroup, and the highlight groups are registered automatically at Neovim
+startup by `plugin/csub.lua`. The heavier submodules are deferred and only
+load on the first `:Csub` invocation or the first quickfix-related event.
 
->lua
-require("csub").setup()
-<
-
-This registers the `quickfixtextfunc` and the `:Csub` command.
-
-With configuration:
+To override the defaults, call `setup()` from your config:
 
 >lua
 require("csub").setup({
@@ -40,6 +37,9 @@ require("csub").setup({
     default_mode = "replace",
 })
 <
+
+`setup()` only merges your options into the module-scoped config table; it
+has no other side effects.
 
 ==============================================================================
 USAGE                                                              *csub-usage*
