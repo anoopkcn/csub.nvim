@@ -71,6 +71,12 @@ require("csub").setup({
 
     -- Fallback mode when no handler matches (default: "replace")
     default_mode = "replace",
+
+    -- Per-line treesitter syntax highlighting in `replace` and `buffers` modes
+    -- (default: true). Each line is highlighted using the source file's
+    -- filetype, so a mixed-language quickfix list shows each entry in its own
+    -- language. Lines with no installed parser are left unhighlighted.
+    syntax_highlight = true,
 })
 ```
 

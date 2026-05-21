@@ -177,6 +177,7 @@ local function on_lines(bufnr, firstline, lastline, new_lastline)
     local lines = buf_get_lines(bufnr, 0, -1, false)
     vim.b[bufnr].csub_lines = lines
     set_metadata(bufnr, current_entries, mode)
+    require("csub.highlight").refresh_range(bufnr, firstline, new_lastline)
     update_dirty(bufnr, lines, current_entries, mode)
     utils.silence_modified(bufnr)
 end
@@ -209,6 +210,7 @@ function M.populate(bufnr, qflist, mode, opts)
     vim.b[bufnr].csub_updating = false
 
     set_metadata(bufnr, current_entries, mode)
+    require("csub.highlight").attach(bufnr, current_entries, mode, opts.syntax_highlight ~= false)
     vim.b[bufnr].csub_lines = lines
     vim.b[bufnr].csub_dirty = false
     vim.bo[bufnr].modified = false
@@ -288,6 +290,12 @@ function M.ensure_buffer(state, winid, qf_bufnr, on_write)
         buffer = bufnr,
         callback = function()
             window.apply_window_opts(vim.api.nvim_get_current_win())
+        end,
+    })
+    create_autocmd("BufWipeout", {
+        buffer = bufnr,
+        callback = function()
+            require("csub.highlight").detach(bufnr)
         end,
     })
     return bufnr
