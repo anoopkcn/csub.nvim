@@ -7,14 +7,12 @@ Source:     https://github.com/anoopkcn/csub.nvim
 INTRODUCTION                                                       *csub-intro*
 
 csub lets you edit the current quickfix list in a scratch buffer and write the
-changes back to the original files. In "replace" and "buffers" modes it shows
-a metadata column (file|line:col) beside each entry to keep context while
-editing; in "files" mode the line itself is the editable file path.
+changes back to the original files. It shows a metadata column (file|line:col)
+beside each entry to keep context while editing.
 
 Different modes allow csub to behave appropriately based on the quickfix source:
 - "replace" mode: Edit text to replace lines in source files (grep, make)
 - "buffers" mode: Delete lines to close buffers (buffer pickers)
-- "files" mode: Create, rename, or delete files and folders (file listings)
 
 ==============================================================================
 SETUP                                                              *csub-setup*
@@ -30,7 +28,6 @@ To override the defaults, call `setup()` from your config:
 require("csub").setup({
     handlers = {
         { match = "FuzzyBuffers", mode = "buffers" },
-        { match = "FuzzyFiles",   mode = "files"   },
         { match = "Grep",         mode = "replace" },
         { match = "Diagnostics",  mode = nil       }, -- disable csub
     },
@@ -48,14 +45,12 @@ USAGE                                                              *csub-usage*
   or a file picker).
 - Run `:Csub` to open the editable buffer for the current quickfix list in the
   quickfix window.
-- Edit the lines directly. Deleting a line removes that quickfix entry. In
-  "replace" and "buffers" modes, attempts to add lines are reverted with a
-  warning; in "files" mode, new lines become file or folder creations.
+- Edit the lines directly. Deleting a line removes that quickfix entry.
+  Attempts to add lines are reverted with a warning.
 - Run `:Csub` again to jump back to the quickfix window while keeping unsaved
   edits in the csub buffer.
 - Write (`:w`) to apply changes back to the underlying files/quickfix entries;
-  the quickfix window is shown again after writing. In "files" mode, `:w!` is
-  required to commit destructive operations (see |csub-mode-files|).
+  the quickfix window is shown again after writing.
 
 ==============================================================================
 EXAMPLES                                                        *csub-examples*
@@ -76,22 +71,6 @@ the quickfix list with a recognisable title):
     :w
 <
 
-Rename, delete, or create files (uses "files" mode):
->lua
-    -- Populate the quickfix list with file paths and a recognised title,
-    -- then run :Csub. Example using a custom title:
-    vim.fn.setqflist({}, " ", {
-        title = "FuzzyFiles",
-        items = vim.tbl_map(function(p)
-            return { filename = p, lnum = 1, col = 1, text = p }
-        end, vim.fn.glob("lua/**/*.lua", false, true)),
-    })
-    vim.cmd("copen")
-    vim.cmd("Csub")
-<
-Then edit lines to rename, delete lines to remove, or add new lines (with a
-trailing `/` to create a folder). Use `:w!` to commit deletes and overwrites.
-
 ==============================================================================
 COMMANDS                                                        *csub-commands*
 
@@ -107,7 +86,7 @@ handlers ~
     List of handler tables to detect mode based on quickfix title. Each handler
     has two fields:
     - `match`: String to match against the quickfix list title (plain text)
-    - `mode`: Mode to use when matched ("replace", "buffers", "files", or nil)
+    - `mode`: Mode to use when matched ("replace", "buffers", or nil)
 
     Handlers are checked in order; the first match wins.
 
@@ -131,26 +110,6 @@ csub supports different modes that change behavior on save:
     - Use case: Buffer pickers that populate quickfix
     - Use `:w!` to force-close modified buffers
 
-"files"                                                        *csub-mode-files*
-    - Delete line: Delete the file (or folder, recursively)
-    - Edit line: Rename the file or folder; if a buffer is open for the old
-      path it is renamed via |nvim_buf_set_name()| so unsaved edits follow
-    - Add line: Create an empty file; trailing `/` creates a folder. Parent
-      folders are created as needed.
-    - Use case: Editing a quickfix list of file paths (e.g. from a file
-      picker, `find`, or a custom command)
-    - Folders are displayed with a trailing `/` so they can be distinguished
-      from regular files at a glance.
-    - To add a new file inside an existing folder, insert a new line for the
-      file's full path (e.g. `o` then `mydir/new.txt`). Editing the folder's
-      own line to a path inside it is rejected with a clear message, since
-      that operation would mean renaming a folder into its own subpath.
-    - Plain `:w` refuses to apply destructive operations (deletes and any
-      operation that would overwrite an existing path) and lists them via
-      |vim.notify()|. Use `:w!` to commit.
-    - Folder renames do not propagate to open buffers for descendant files;
-      only paths that appear as their own quickfix entries are tracked.
-
 nil                                                         *csub-mode-disabled*
     - Disables csub for matching quickfix lists
     - `:Csub` will show a message and do nothing
@@ -169,8 +128,6 @@ NOTES                                                              *csub-notes*
   reported and that entry is left unchanged.
 - Mode is detected from the quickfix title when `:Csub` is invoked.
 - In "buffers" mode, only line deletions have an effect; text edits are ignored.
-- In "files" mode, the metadata column is suppressed because line/column
-  information is not meaningful for file paths.
 
 ==============================================================================
 LICENSE                                                          *csub-license*

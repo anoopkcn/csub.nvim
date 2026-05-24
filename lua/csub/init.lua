@@ -42,7 +42,6 @@ local state = {
 local config = {
     handlers = {},
     default_mode = "replace",
-    syntax_highlight = true,
 }
 
 local function current_qf_id()
@@ -144,14 +143,8 @@ local function open_replace_window()
 
     if vim.b[bufnr].csub_dirty and vim.b[bufnr].csub_qf_id == qf_id then
         vim.b[bufnr].csub_mode = mode
-        if config.syntax_highlight then
-            require("csub.highlight").ensure(bufnr)
-        end
     else
-        buffer.populate(bufnr, current_qflist, mode, {
-            qf_id = qf_id,
-            syntax_highlight = config.syntax_highlight,
-        })
+        buffer.populate(bufnr, current_qflist, mode, { qf_id = qf_id })
     end
 
     window.apply_window_opts(target_win)
@@ -208,10 +201,6 @@ function M.setup(opts)
 
     if opts.default_mode ~= nil then
         config.default_mode = opts.default_mode
-    end
-
-    if opts.syntax_highlight ~= nil then
-        config.syntax_highlight = opts.syntax_highlight
     end
 end
 
