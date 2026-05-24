@@ -58,6 +58,7 @@ local function strip_internal_fields(entries)
     for _, entry in ipairs(entries) do
         entry._csub_deleted = nil
         entry._csub_id = nil
+        entry._csub_chunks = nil
     end
     return entries
 end

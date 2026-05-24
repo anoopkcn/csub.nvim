@@ -79,35 +79,56 @@ local function apply_meta_extmarks(bufnr, items)
     end
 end
 
+local function meta_signature(id, changedtick)
+    return string.format("%d:%d", id or 0, changedtick or 0)
+end
+
 --- Highlight the metadata column on a quickfix or loclist buffer. Resolves
---- which list owns the buffer (qf or some window's loclist) and applies
---- extmarks accordingly.
+--- which list owns the buffer and applies extmarks. Skips when the list's
+--- (id, changedtick) signature matches the last render — avoids re-walking
+--- a large list on every BufWinEnter.
 local function highlight_list_buffer(bufnr)
     bufnr = bufnr or 0
     if bufnr == 0 then
         bufnr = get_current_buf()
     end
     local found = list.find_for_buffer(bufnr)
-    if found then
-        apply_meta_extmarks(found.list_bufnr, found.items)
-    end
+    if not found then return end
+
+    local sig = meta_signature(found.id, found.changedtick)
+    if vim.b[bufnr].csub_meta_sig == sig then return end
+    vim.b[bufnr].csub_meta_sig = sig
+    apply_meta_extmarks(found.list_bufnr, found.items)
 end
 
 --- Refresh metadata extmarks on all quickfix-typed buffers (qf + loclists).
 --- Called from QuickFixCmdPost where we don't know which list just changed.
+--- Uses the same (id, changedtick) cache as highlight_list_buffer.
 local function refresh_all_list_buffers()
-    local qf_info = vim.fn.getqflist({ qfbufnr = 1, items = 1 })
+    local qf_info = vim.fn.getqflist({
+        qfbufnr = 1, items = 1, id = 0, changedtick = 0,
+    })
     if qf_info.qfbufnr and qf_info.qfbufnr ~= 0 then
-        apply_meta_extmarks(qf_info.qfbufnr, qf_info.items or {})
+        local sig = meta_signature(qf_info.id, qf_info.changedtick)
+        if vim.b[qf_info.qfbufnr].csub_meta_sig ~= sig then
+            vim.b[qf_info.qfbufnr].csub_meta_sig = sig
+            apply_meta_extmarks(qf_info.qfbufnr, qf_info.items or {})
+        end
     end
     for _, win in ipairs(vim.api.nvim_list_wins()) do
         if list.is_loclist_window(win) then
             local fi = vim.fn.getloclist(win, { filewinid = 0 })
             local owner = fi and fi.filewinid or 0
             if owner ~= 0 then
-                local ll = vim.fn.getloclist(owner, { qfbufnr = 1, items = 1 })
+                local ll = vim.fn.getloclist(owner, {
+                    qfbufnr = 1, items = 1, id = 0, changedtick = 0,
+                })
                 if ll.qfbufnr and ll.qfbufnr ~= 0 then
-                    apply_meta_extmarks(ll.qfbufnr, ll.items or {})
+                    local sig = meta_signature(ll.id, ll.changedtick)
+                    if vim.b[ll.qfbufnr].csub_meta_sig ~= sig then
+                        vim.b[ll.qfbufnr].csub_meta_sig = sig
+                        apply_meta_extmarks(ll.qfbufnr, ll.items or {})
+                    end
                 end
             end
         end

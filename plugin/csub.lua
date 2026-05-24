@@ -3,7 +3,13 @@ if vim.g.loaded_csub == 1 then
 end
 vim.g.loaded_csub = 1
 
-vim.o.quickfixtextfunc = "v:lua.require'csub'.quickfix_text"
+-- Only claim quickfixtextfunc if nothing else has set it, so we don't
+-- silently override a user/other-plugin setting. Users who want csub to
+-- take it over can clear theirs (`set quickfixtextfunc=`) before loading
+-- csub, or explicitly set it to our function themselves.
+if vim.o.quickfixtextfunc == "" then
+    vim.o.quickfixtextfunc = "v:lua.require'csub'.quickfix_text"
+end
 
 local set_hl = vim.api.nvim_set_hl
 set_hl(0, "CsubSeparator", { link = "Comment", default = true })

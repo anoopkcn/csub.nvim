@@ -40,6 +40,15 @@ local function is_context_line(entry, name)
     return name == "" and (entry.lnum or 0) == 0 and (entry.col or 0) == 0
 end
 
+-- Right-pad with spaces to `width`. Faster than `string.format("%-Ns", ...)`
+-- with a dynamic spec, because string.rep is a tight C loop and we skip
+-- building a one-shot format string per call.
+local function pad_right(s, width)
+    local pad = width - #s
+    if pad <= 0 then return s end
+    return s .. string.rep(" ", pad)
+end
+
 function M.format_meta(entry, opts)
     local width = (opts and opts.width) or M.META_WIDTH
     local name = normalize_name(entry)
@@ -55,7 +64,7 @@ function M.format_meta(entry, opts)
     local name_width = math.max(width - #suffix, 1)
     local display_name = truncate_path(name, name_width)
 
-    return string.format("%-" .. name_width .. "s%s", display_name, suffix)
+    return pad_right(display_name, name_width) .. suffix
 end
 
 function M.format_meta_chunks(entry, opts)
@@ -75,10 +84,9 @@ function M.format_meta_chunks(entry, opts)
     local name_width = math.max(width - #suffix - 3, 1) -- 3 = two "|" + trailing space
 
     local display_name = truncate_path(name, name_width)
-    local padded_name = string.format("%-" .. name_width .. "s", display_name)
 
     return {
-        { padded_name, "CsubMetaFileName" },
+        { pad_right(display_name, name_width), "CsubMetaFileName" },
         { "|", "CsubSeparator" },
         { suffix, "CsubMetaNumber" },
         { "|", "CsubSeparator" },

@@ -65,12 +65,16 @@ end
 --- highlighter to figure out which list a quickfix-typed buffer belongs to.
 function M.find_for_buffer(bufnr)
     if not bufnr then return nil end
-    local qf_info = vim.fn.getqflist({ qfbufnr = 1, items = 1 })
+    local qf_info = vim.fn.getqflist({
+        qfbufnr = 1, items = 1, id = 0, changedtick = 0,
+    })
     if qf_info.qfbufnr == bufnr then
         return {
             target = { kind = "qf", winid = nil },
             items = qf_info.items or {},
             list_bufnr = bufnr,
+            id = qf_info.id or 0,
+            changedtick = qf_info.changedtick or 0,
         }
     end
     for _, win in ipairs(list_wins()) do
@@ -78,12 +82,16 @@ function M.find_for_buffer(bufnr)
             local fi = vim.fn.getloclist(win, { filewinid = 0 })
             local owner = fi and fi.filewinid or 0
             if owner ~= 0 then
-                local ll = vim.fn.getloclist(owner, { qfbufnr = 1, items = 1 })
+                local ll = vim.fn.getloclist(owner, {
+                    qfbufnr = 1, items = 1, id = 0, changedtick = 0,
+                })
                 if ll.qfbufnr == bufnr then
                     return {
                         target = { kind = "loclist", winid = owner },
                         items = ll.items or {},
                         list_bufnr = bufnr,
+                        id = ll.id or 0,
+                        changedtick = ll.changedtick or 0,
                     }
                 end
             end

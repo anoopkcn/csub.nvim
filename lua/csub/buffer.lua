@@ -44,6 +44,11 @@ local function clone_entries(qflist)
     local entries = vim.deepcopy(qflist or {}, true)
     for i, entry in ipairs(entries) do
         entry._csub_id = i
+        -- Cache the metadata chunks once per entry. Each entry's chunks
+        -- depend only on bufnr/filename/lnum/col, which don't change
+        -- during an edit session, so the hot-path set_metadata reduces to
+        -- bare extmark calls.
+        entry._csub_chunks = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH })
     end
     return entries
 end
@@ -54,7 +59,7 @@ local function set_metadata(bufnr, entries)
     for idx, entry in ipairs(entries) do
         if idx > line_count then break end
         buf_set_extmark(bufnr, ns, idx - 1, 0, {
-            virt_text = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH }),
+            virt_text = entry._csub_chunks,
             virt_text_pos = "inline",
             hl_mode = "combine",
             strict = false,
@@ -192,7 +197,15 @@ function M.populate(bufnr, qflist, mode, opts)
         orig_entries = full_orig
     end
 
-    local current_entries = vim.deepcopy(orig_entries, true)
+    -- Shallow per-entry copy is enough for `current`: qf entry values
+    -- (bufnr, lnum, col, text, _csub_id, ...) are scalars, and apply only
+    -- mutates `.text`. Avoids a second full deepcopy on large lists.
+    local current_entries = {}
+    for i, entry in ipairs(orig_entries) do
+        local copy = {}
+        for k, v in pairs(entry) do copy[k] = v end
+        current_entries[i] = copy
+    end
 
     local lines = {}
     for i, entry in ipairs(current_entries) do

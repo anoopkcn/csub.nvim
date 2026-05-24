@@ -1,4 +1,4 @@
-*csub.txt*       Quickfix batch editing with live metadata       *csub*
+*csub.txt*  Quickfix / loclist batch editing with live metadata        *csub*
 
 Maintainer: Anoop K Chandran
 Source:     https://github.com/anoopkcn/csub.nvim
@@ -6,13 +6,17 @@ Source:     https://github.com/anoopkcn/csub.nvim
 ==============================================================================
 INTRODUCTION                                                       *csub-intro*
 
-csub lets you edit the current quickfix list in a scratch buffer and write the
-changes back to the original files. It shows a metadata column (file|line:col)
-beside each entry to keep context while editing.
+csub lets you edit the current quickfix or location list in a scratch buffer
+and write the changes back to the original files. It shows a metadata column
+(file|line:col) beside each entry to keep context while editing, and marks
+edited rows with a `~` sign in the sign column.
 
-Different modes allow csub to behave appropriately based on the quickfix source:
+Different modes allow csub to behave appropriately based on the list source:
 - "replace" mode: Edit text to replace lines in source files (grep, make)
 - "buffers" mode: Delete lines to close buffers (buffer pickers)
+
+`:Csub` works on whichever list (quickfix or location) you invoke it from.
+A range scopes editing to a slice of the list — see |csub-scope|.
 
 ==============================================================================
 SETUP                                                              *csub-setup*
@@ -25,32 +29,35 @@ load on the first `:Csub` invocation or the first quickfix-related event.
 To override the defaults, call `setup()` from your config:
 
 >lua
-require("csub").setup({
-    handlers = {
-        { match = "FuzzyBuffers", mode = "buffers" },
-        { match = "Grep",         mode = "replace" },
-        { match = "Diagnostics",  mode = nil       }, -- disable csub
-    },
-    default_mode = "replace",
-})
+    require("csub").setup({
+        handlers = {
+            { match = "FuzzyBuffers", mode = "buffers" },
+            { match = "Grep",         mode = "replace" },
+            { match = "Diagnostics",  mode = nil       }, -- disable csub
+        },
+        default_mode = "replace",
+    })
 <
 
 `setup()` only merges your options into the module-scoped config table; it
-has no other side effects.
+has no other side effects. The same handler list is checked for both
+quickfix and location list titles.
 
 ==============================================================================
 USAGE                                                              *csub-usage*
 
-- Populate a quickfix list (e.g. via `:make`, `:grep`, `:vim.diagnostic.setqflist`,
-  or a file picker).
-- Run `:Csub` to open the editable buffer for the current quickfix list in the
-  quickfix window.
-- Edit the lines directly. Deleting a line removes that quickfix entry.
-  Attempts to add lines are reverted with a warning.
-- Run `:Csub` again to jump back to the quickfix window while keeping unsaved
+- Populate a quickfix list (`:make`, `:grep`, `vim.diagnostic.setqflist()`, a
+  file picker) or a location list (`:lvimgrep`, `:lgrep`, ...).
+- Open the list window (`:copen` or `:lopen`) and run `:Csub` from inside it
+  to open the editable buffer in place.
+- Optionally scope to a slice with a range: `:5,10Csub` or `:'<,'>Csub`.
+- Edit the lines directly. Edited rows get a `~` sign in the sign column.
+  Deleting a line removes that entry. Attempts to add lines are reverted
+  with a warning.
+- Run `:Csub` again to jump back to the list window while keeping unsaved
   edits in the csub buffer.
-- Write (`:w`) to apply changes back to the underlying files/quickfix entries;
-  the quickfix window is shown again after writing.
+- Write (`:w`) to apply changes back to the underlying files / list; the
+  list window is shown again after writing.
 
 ==============================================================================
 EXAMPLES                                                        *csub-examples*
@@ -58,8 +65,26 @@ EXAMPLES                                                        *csub-examples*
 Find and replace across files (uses "replace" mode):
 >vim
     :grep -rn "old_name" .
+    :copen
     :Csub
     " edit lines, then:
+    :w
+<
+
+Find and replace within a location list:
+>vim
+    :lvimgrep /old_name/ **/*.lua
+    :lopen
+    :Csub
+    " edit lines, then:
+    :w
+<
+
+Edit only a slice of a long quickfix list:
+>vim
+    :copen
+    :120,140Csub      " or visually select rows and press : then Csub
+    " edit those 21 entries; the rest round-trip unchanged
     :w
 <
 
@@ -74,60 +99,104 @@ the quickfix list with a recognisable title):
 ==============================================================================
 COMMANDS                                                        *csub-commands*
 
-:Csub                                                              *:Csub*
-    Open the current quickfix list in an editable buffer using the quickfix
-    window.
+:[range]Csub                                                       *:Csub*
+    Open the current quickfix or location list in an editable buffer using
+    the list window. Without a range, the entire list is shown. With a
+    range (e.g. `:5,10Csub` or `:'<,'>Csub`), only the entries in that
+    range are shown; entries outside the range round-trip unchanged when
+    you write. Re-invoking `:Csub` while inside the csub buffer toggles
+    back to the list window without discarding edits.
+
+==============================================================================
+SCOPED EDITING                                                     *csub-scope*
+
+When `:Csub` is invoked with a range from a quickfix or loclist window,
+only the selected slice is loaded into the csub buffer. On write:
+
+- Edits and deletions inside the slice are applied to those entries.
+- Entries outside the slice are spliced back unchanged.
+- The list id and title are preserved.
+- If you delete every entry in the slice, the scope collapses and the
+  next `:Csub` (no range) shows the full list again.
+
+Invoking `:Csub` with a different range (or without a range) on the same
+list while you have unsaved edits is treated as a context switch; csub
+warns and aborts. Finish or discard the existing edits first.
+
+A ranged `:Csub` from a non-list window is rejected — the visual range
+must be over a list buffer.
 
 ==============================================================================
 OPTIONS                                                          *csub-options*
 
-                                                                  *csub-handlers*
+                                                                *csub-handlers*
 handlers ~
-    List of handler tables to detect mode based on quickfix title. Each handler
+    List of handler tables to detect mode based on list title. Each handler
     has two fields:
-    - `match`: String to match against the quickfix list title (plain text)
+    - `match`: String to match against the list title (plain text)
     - `mode`: Mode to use when matched ("replace", "buffers", or nil)
 
-    Handlers are checked in order; the first match wins.
+    Handlers are checked in order; the first match wins. The same handler
+    list applies to both quickfix and location lists.
 
-                                                              *csub-default_mode*
+                                                            *csub-default_mode*
 default_mode ~
     Fallback mode when no handler matches. Default: "replace"
 
-                                                                    *csub-modes*
+                                                                  *csub-modes*
 MODES ~
 
 csub supports different modes that change behavior on save:
 
-"replace" (default)                                          *csub-mode-replace*
-    - Delete line: Remove entry from quickfix list
+"replace" (default)                                        *csub-mode-replace*
+    - Delete line: Remove entry from the list
     - Edit text: Replace the line in the source file
     - Use case: grep results, compiler errors, diagnostics
 
-"buffers"                                                    *csub-mode-buffers*
-    - Delete line: Close the buffer (`:bdelete`) and remove from quickfix
+"buffers"                                                  *csub-mode-buffers*
+    - Delete line: Close the buffer (`:bdelete`) and remove from the list
     - Edit text: Ignored (no changes applied)
-    - Use case: Buffer pickers that populate quickfix
+    - Use case: Buffer pickers that populate quickfix or loclist
     - Use `:w!` to force-close modified buffers
 
-nil                                                         *csub-mode-disabled*
-    - Disables csub for matching quickfix lists
+nil                                                       *csub-mode-disabled*
+    - Disables csub for matching lists
     - `:Csub` will show a message and do nothing
 
-g:csub_no_save                                                  *g:csub_no_save*
-    When set to a non-zero value and 'hidden' is enabled, avoid saving buffers
-    while applying changes (leave buffers modified but listed). Defaults to 0.
+g:csub_no_save                                                *g:csub_no_save*
+    When set to a non-zero value and 'hidden' is enabled, avoid saving
+    buffers while applying changes (leave buffers modified but listed).
+    Defaults to 0.
+
+==============================================================================
+HIGHLIGHT GROUPS                                              *csub-highlights*
+
+All groups are defined with `default = true` so user overrides take effect.
+
+`CsubMetaFileName`   linked to `Comment`    — file-name part of the metadata
+`CsubMetaNumber`     linked to `Number`     — line/column numbers
+`CsubSeparator`      linked to `Comment`    — `|` separators in the metadata
+`CsubDirtyLine`      linked to `DiffChange` — `~` sign on edited rows
 
 ==============================================================================
 NOTES                                                              *csub-notes*
 
-- The buffer uses `filetype=csub` and is named `[csub]`.
+- The buffer uses `filetype=csub` and is named `[csub]`. A single shared
+  csub buffer is reused across invocations; switching to a different list
+  with unsaved edits triggers a warning.
 - The metadata column is virtual text; wrapping is disabled locally.
-- Original text changes in target files are detected; if the current buffer
-  differs from the original quickfix text and from your edits, an error is
-  reported and that entry is left unchanged.
-- Mode is detected from the quickfix title when `:Csub` is invoked.
-- In "buffers" mode, only line deletions have an effect; text edits are ignored.
+- Edited rows are marked with a `~` sign in the sign column (`signcolumn`
+  auto-shows). The mark disappears when the line is reverted to its
+  original text.
+- Original text changes in target files are detected; if the current
+  buffer differs from the original entry text and from your edits, an
+  error is reported and that entry is left unchanged.
+- Mode is detected from the list title when `:Csub` is invoked.
+- In "buffers" mode, only line deletions have an effect; text edits are
+  ignored.
+- Location lists are addressed by their owner window (the window the
+  loclist is attached to), which survives the loclist display window
+  being closed.
 
 ==============================================================================
 LICENSE                                                          *csub-license*
