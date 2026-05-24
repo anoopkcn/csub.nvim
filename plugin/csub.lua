@@ -9,6 +9,7 @@ local set_hl = vim.api.nvim_set_hl
 set_hl(0, "CsubSeparator", { link = "Comment", default = true })
 set_hl(0, "CsubMetaFileName", { link = "Comment", default = true })
 set_hl(0, "CsubMetaNumber", { link = "Number", default = true })
+set_hl(0, "CsubDirtyLine", { link = "DiffChange", default = true })
 
 local augroup = vim.api.nvim_create_augroup("csub", { clear = true })
 
@@ -25,7 +26,7 @@ vim.api.nvim_create_autocmd("QuickFixCmdPost", {
     pattern = "*",
     callback = function()
         vim.schedule(function()
-            require("csub")._highlight_qf_buffer()
+            require("csub")._refresh_all_list_buffers()
         end)
     end,
 })
@@ -34,16 +35,22 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
     group = augroup,
     callback = function(args)
         if vim.bo[args.buf].buftype == "quickfix" then
+            local bufnr = args.buf
             vim.schedule(function()
-                require("csub")._highlight_qf_buffer()
+                require("csub")._highlight_list_buffer(bufnr)
             end)
         end
     end,
 })
 
-vim.api.nvim_create_user_command("Csub", function()
-    require("csub").start()
+vim.api.nvim_create_user_command("Csub", function(opts)
+    require("csub").start({
+        range = opts.range,
+        line1 = opts.line1,
+        line2 = opts.line2,
+    })
 end, {
     desc = "Toggle an editable quickfix buffer",
+    range = true,
     nargs = 0,
 })

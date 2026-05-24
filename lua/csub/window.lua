@@ -1,3 +1,5 @@
+local list = require("csub.list")
+
 local M = {}
 
 -- Cache frequently used API functions
@@ -6,6 +8,7 @@ local buf_is_valid = vim.api.nvim_buf_is_valid
 local win_get_buf = vim.api.nvim_win_get_buf
 local win_set_buf = vim.api.nvim_win_set_buf
 local set_current_win = vim.api.nvim_set_current_win
+local get_current_win = vim.api.nvim_get_current_win
 local list_wins = vim.api.nvim_list_wins
 local set_option_value = vim.api.nvim_set_option_value
 
@@ -25,8 +28,20 @@ end
 
 function M.find_quickfix_window()
     for _, win in ipairs(list_wins()) do
-        if M.is_quickfix_window(win) then
+        if M.is_quickfix_window(win) and not list.is_loclist_window(win) then
             return win
+        end
+    end
+end
+
+function M.find_loclist_window(owner_winid)
+    if not owner_winid or not win_is_valid(owner_winid) then return nil end
+    for _, win in ipairs(list_wins()) do
+        if list.is_loclist_window(win) then
+            local fi = vim.fn.getloclist(win, { filewinid = 0 })
+            if fi and fi.filewinid == owner_winid then
+                return win
+            end
         end
     end
 end
@@ -36,9 +51,28 @@ function M.ensure_quickfix_window()
     if winid then
         return winid
     end
-
     pcall(vim.cmd.copen)
     return M.find_quickfix_window()
+end
+
+function M.ensure_list_window(target)
+    if target.kind == "loclist" then
+        local win = M.find_loclist_window(target.winid)
+        if win then return win end
+        if target.winid and win_is_valid(target.winid) then
+            local prev = get_current_win()
+            local ok = pcall(set_current_win, target.winid)
+            if ok then
+                pcall(vim.cmd.lopen)
+                if win_is_valid(prev) then
+                    pcall(set_current_win, prev)
+                end
+            end
+            return M.find_loclist_window(target.winid)
+        end
+        return nil
+    end
+    return M.ensure_quickfix_window()
 end
 
 function M.find_window_with_buf(bufnr)

@@ -1,4 +1,5 @@
 local buffer = require("csub.buffer")
+local list = require("csub.list")
 local utils = require("csub.utils")
 local view = require("csub.view")
 local window = require("csub.window")
@@ -64,7 +65,7 @@ end
 --- Apply changes in "replace" mode: edit lines in source files
 local function apply_replace(qf_orig, current_entries, new_text_lines)
     local _, current_index = build_entry_index(current_entries)
-    local prev_bufnr = -1
+    local dirty_bufnrs = {}
 
     for _, entry in ipairs(qf_orig) do
         local key = entry_id(entry)
@@ -86,12 +87,7 @@ local function apply_replace(qf_orig, current_entries, new_text_lines)
             goto continue
         end
 
-        if prev_bufnr ~= entry.bufnr then
-            if prev_bufnr ~= -1 then
-                save_buffer(prev_bufnr)
-            end
-            ensure_loaded(entry.bufnr)
-        end
+        ensure_loaded(entry.bufnr)
 
         local current_line = buf_get_lines(entry.bufnr, entry.lnum - 1, entry.lnum, false)[1] or ""
         local original_text = utils.chomp(entry.text)
@@ -104,13 +100,15 @@ local function apply_replace(qf_orig, current_entries, new_text_lines)
             buf_set_lines(entry.bufnr, entry.lnum - 1, entry.lnum, false, { new_text })
             entry.text = new_text
             current_entries[line_idx].text = new_text
+            dirty_bufnrs[entry.bufnr] = true
         end
 
-        prev_bufnr = entry.bufnr
         ::continue::
     end
 
-    save_buffer(prev_bufnr)
+    for buf in pairs(dirty_bufnrs) do
+        save_buffer(buf)
+    end
 end
 
 --- Apply changes in "buffers" mode: close deleted buffers, ignore text edits
@@ -140,15 +138,23 @@ local function apply_buffers(qf_orig, current_entries)
     end
 end
 
-function M.apply(bufnr, winid, qf_bufnr)
-    local qf_stored = vim.b[bufnr].csub_orig_qflist or {}
-    local current_entries = vim.b[bufnr].csub_current_entries or qf_stored
+function M.apply(bufnr, winid, source_bufnr)
+    local state = buffer.get_state(bufnr) or { orig = {}, current = {}, lines = {} }
+    local qf_stored = state.orig
+    local current_entries = state.current
+    local scope = state.scope
+    local full_orig_stored = state.full_orig or qf_stored
     local mode = vim.b[bufnr].csub_mode or "replace"
+    local target = {
+        kind = vim.b[bufnr].csub_target_kind or "qf",
+        winid = vim.b[bufnr].csub_target_winid or 0,
+    }
+    if target.winid == 0 then target.winid = nil end
     local qf_orig = vim.deepcopy(qf_stored, true)
     local new_text_lines = buf_get_lines(bufnr, 0, -1, false)
 
     if #new_text_lines > #qf_orig then
-        utils.echoerr(("csub: Cannot add lines (quickfix: %d, buffer: %d)"):format(#qf_orig, #new_text_lines))
+        utils.echoerr(("csub: Cannot add lines (list: %d, buffer: %d)"):format(#qf_orig, #new_text_lines))
         return
     end
 
@@ -163,36 +169,65 @@ function M.apply(bufnr, winid, qf_bufnr)
         apply_replace(qf_orig, current_entries, new_text_lines)
     end
 
-    local filtered_qf = vim.iter(qf_orig):filter(function(e)
+    local survivors = vim.iter(qf_orig):filter(function(e)
         return not e._csub_deleted
     end):totable()
 
-    local qf_for_write = strip_internal_fields(vim.deepcopy(filtered_qf, true))
-    -- Target the qf list by id and use the dict form so the title and context
+    -- Build the full new list. When scoped, splice survivors into the
+    -- original surrounding entries; otherwise the survivors *are* the list.
+    local final_list
+    local new_scope
+    if scope then
+        final_list = {}
+        for i = 1, scope.first - 1 do
+            final_list[#final_list + 1] = full_orig_stored[i]
+        end
+        for _, e in ipairs(survivors) do
+            final_list[#final_list + 1] = e
+        end
+        local suffix_start = scope.last + 1
+        for i = suffix_start, #full_orig_stored do
+            final_list[#final_list + 1] = full_orig_stored[i]
+        end
+        if #survivors == 0 then
+            new_scope = nil  -- scope collapsed; drop and show full list next time
+        else
+            new_scope = { first = scope.first, last = scope.first + #survivors - 1 }
+        end
+    else
+        final_list = survivors
+        new_scope = nil
+    end
+
+    local items_for_write = strip_internal_fields(vim.deepcopy(final_list, true))
+    -- Target the list by id and use the dict form so the title and context
     -- are preserved. The bare setqflist({list}, "r") form clobbers the title
     -- to ":setqflist()", which then breaks mode detection on the next :Csub.
-    local target_id = vim.b[bufnr].csub_qf_id or vim.fn.getqflist({ id = 0 }).id
-    vim.fn.setqflist({}, "r", { id = target_id, items = qf_for_write })
+    local target_id = vim.b[bufnr].csub_list_id or list.current_id(target)
+    list.set(target, "r", { id = target_id, items = items_for_write })
 
-    local qf_info = vim.fn.getqflist({ id = target_id, qfbufnr = 1 })
-    local qf_id = qf_info and qf_info.id or target_id
-    buffer.populate(bufnr, filtered_qf, mode, { qf_id = qf_id })
+    local list_info = list.get(target, { id = target_id, qfbufnr = 1 })
+    local list_id = list_info and list_info.id or target_id
+    local signature = list.signature(target, list_id, new_scope)
+    buffer.populate(bufnr, final_list, mode, {
+        list_id = list_id,
+        target = target,
+        signature = signature,
+        scope = new_scope,
+    })
 
-    local target_qfbuf = qf_info and qf_info.qfbufnr or qf_bufnr
-    if not target_qfbuf then return end
+    local target_listbuf = list_info and list_info.qfbufnr or source_bufnr
+    if not target_listbuf then return end
 
     vim.schedule(function()
         local win = (window.find_window_with_buf(bufnr) or winid)
         if not (win and win_is_valid(win)) then
-            win = window.find_quickfix_window()
+            win = window.ensure_list_window(target)
         end
-        if not (win and win_is_valid(win)) then
-            win = window.ensure_quickfix_window()
-        end
-        if win and buf_is_valid(target_qfbuf) then
-            window.use_buf(win, target_qfbuf)
-            local line = math.max(1, math.min(desired_line, buf_line_count(target_qfbuf)))
-            view.restore(win, target_qfbuf, saved_view, line)
+        if win and buf_is_valid(target_listbuf) then
+            window.use_buf(win, target_listbuf)
+            local line = math.max(1, math.min(desired_line, buf_line_count(target_listbuf)))
+            view.restore(win, target_listbuf, saved_view, line)
         end
     end)
 end

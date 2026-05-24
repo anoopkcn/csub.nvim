@@ -11,6 +11,7 @@ end
 
 local buffer = lazy_require("csub.buffer")
 local fmt = lazy_require("csub.format")
+local list = lazy_require("csub.list")
 local replace = lazy_require("csub.replace")
 local view = lazy_require("csub.view")
 local window = lazy_require("csub.window")
@@ -33,10 +34,11 @@ local qf_ns = create_namespace("csub_qf_meta")
 
 local state = {
     bufnr = nil,
-    qf_bufnr = nil,
-    qf_winid = nil,
-    qf_cursor = 1,
-    qf_view = nil,
+    source_bufnr = nil,
+    source_winid = nil,
+    cursor_line = 1,
+    saved_view = nil,
+    target = { kind = "qf", winid = nil },
 }
 
 local config = {
@@ -44,15 +46,12 @@ local config = {
     default_mode = "replace",
 }
 
-local function current_qf_id()
-    return (vim.fn.getqflist({ id = 0 }).id) or 0
-end
-
---- Detect the mode for the current quickfix list based on its title
+--- Detect mode based on the list's title.
+--- @param target table { kind, winid }
 --- @return string|nil mode The detected mode, or nil if csub should be disabled
-local function detect_mode()
-    local qf_info = vim.fn.getqflist({ title = 1 })
-    local title = qf_info.title or ""
+local function detect_mode(target)
+    local info = list.get(target, { title = 1 })
+    local title = (info and info.title) or ""
 
     for _, handler in ipairs(config.handlers) do
         if title:find(handler.match, 1, true) then
@@ -63,23 +62,14 @@ local function detect_mode()
     return config.default_mode
 end
 
-local function highlight_qf_buffer()
-    local qf_info = vim.fn.getqflist({ qfbufnr = 1, items = 1 })
-    local qfbufnr = qf_info.qfbufnr
-    if not qfbufnr or qfbufnr == 0 or not buf_is_valid(qfbufnr) then
-        return
-    end
+local function apply_meta_extmarks(bufnr, items)
+    if not bufnr or not buf_is_valid(bufnr) then return end
+    if not items or #items == 0 then return end
 
-    local items = qf_info.items or {}
-    if #items == 0 then
-        return
-    end
-
-    buf_clear_namespace(qfbufnr, qf_ns, 0, -1)
-
+    buf_clear_namespace(bufnr, qf_ns, 0, -1)
     for idx, entry in ipairs(items) do
         local chunks = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH })
-        buf_set_extmark(qfbufnr, qf_ns, idx - 1, 0, {
+        buf_set_extmark(bufnr, qf_ns, idx - 1, 0, {
             virt_text = chunks,
             virt_text_pos = "overlay",
             hl_mode = "replace",
@@ -89,105 +79,175 @@ local function highlight_qf_buffer()
     end
 end
 
-local function open_replace_window()
-    local current_qflist = vim.fn.getqflist()
-    if not current_qflist or #current_qflist == 0 then
-        vim.notify("[csub] No quickfix list available.", vim.log.levels.INFO)
-        return
+--- Highlight the metadata column on a quickfix or loclist buffer. Resolves
+--- which list owns the buffer (qf or some window's loclist) and applies
+--- extmarks accordingly.
+local function highlight_list_buffer(bufnr)
+    bufnr = bufnr or 0
+    if bufnr == 0 then
+        bufnr = get_current_buf()
     end
-
-    -- Detect mode from quickfix title
-    local mode = detect_mode()
-    if mode == nil then
-        vim.notify("[csub] Csub is disabled for this quickfix list.", vim.log.levels.INFO)
-        return
+    local found = list.find_for_buffer(bufnr)
+    if found then
+        apply_meta_extmarks(found.list_bufnr, found.items)
     end
+end
 
-    -- Only use stored window if it's still a valid quickfix window
-    local target_win = state.qf_winid
-    if not window.is_quickfix_window(target_win) then
-        target_win = window.ensure_quickfix_window()
+--- Refresh metadata extmarks on all quickfix-typed buffers (qf + loclists).
+--- Called from QuickFixCmdPost where we don't know which list just changed.
+local function refresh_all_list_buffers()
+    local qf_info = vim.fn.getqflist({ qfbufnr = 1, items = 1 })
+    if qf_info.qfbufnr and qf_info.qfbufnr ~= 0 then
+        apply_meta_extmarks(qf_info.qfbufnr, qf_info.items or {})
     end
-    if not target_win then
-        vim.notify("[csub] Unable to open quickfix window.", vim.log.levels.ERROR)
-        return
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+        if list.is_loclist_window(win) then
+            local fi = vim.fn.getloclist(win, { filewinid = 0 })
+            local owner = fi and fi.filewinid or 0
+            if owner ~= 0 then
+                local ll = vim.fn.getloclist(owner, { qfbufnr = 1, items = 1 })
+                if ll.qfbufnr and ll.qfbufnr ~= 0 then
+                    apply_meta_extmarks(ll.qfbufnr, ll.items or {})
+                end
+            end
+        end
     end
+end
 
-    state.qf_winid = target_win
-    state.qf_bufnr = win_get_buf(target_win)
-    local qf_view = view.save(target_win, state.qf_bufnr)
-    local cursor_line = (qf_view and qf_view.lnum) or win_get_cursor(target_win)[1]
-    local qf_id = current_qf_id()
-    state.qf_cursor = cursor_line
-    state.qf_view = qf_view
+local function open_replace_window(invoking_winid, scope)
+    local target = list.classify(invoking_winid)
 
-    if state.bufnr
-        and buf_is_valid(state.bufnr)
-        and vim.b[state.bufnr].csub_dirty
-        and vim.b[state.bufnr].csub_qf_id
-        and vim.b[state.bufnr].csub_qf_id ~= qf_id then
+    -- A visual range only makes sense over a list buffer.
+    if scope and not window.is_quickfix_window(invoking_winid) then
         vim.notify(
-            "[csub] Existing csub buffer has unsaved changes for another quickfix list.",
+            "[csub] :Csub with a range must be invoked from a quickfix or loclist window.",
             vim.log.levels.WARN
         )
         return
     end
 
-    local bufnr = buffer.ensure_buffer(state, target_win, state.qf_bufnr, replace.apply)
+    local current_items = list.get(target, { items = 1 }).items or {}
+    if #current_items == 0 then
+        local label = target.kind == "loclist" and "location list" or "quickfix list"
+        vim.notify(("[csub] No %s available."):format(label), vim.log.levels.INFO)
+        return
+    end
+
+    if scope then
+        scope.first = math.max(1, math.min(scope.first, #current_items))
+        scope.last = math.max(scope.first, math.min(scope.last, #current_items))
+    end
+
+    local mode = detect_mode(target)
+    if mode == nil then
+        local label = target.kind == "loclist" and "location list" or "quickfix list"
+        vim.notify(("[csub] Csub is disabled for this %s."):format(label), vim.log.levels.INFO)
+        return
+    end
+
+    -- Pick the list window to host the csub buffer.
+    local target_win = state.source_winid
+    if not (target_win and win_is_valid(target_win)
+            and window.is_quickfix_window(target_win)
+            and list.classify(target_win).kind == target.kind
+            and (target.kind ~= "loclist" or list.classify(target_win).winid == target.winid)) then
+        target_win = window.ensure_list_window(target)
+    end
+    if not target_win then
+        vim.notify("[csub] Unable to open list window.", vim.log.levels.ERROR)
+        return
+    end
+
+    state.target = target
+    state.source_winid = target_win
+    state.source_bufnr = win_get_buf(target_win)
+    local saved_view = view.save(target_win, state.source_bufnr)
+    local cursor_line = (saved_view and saved_view.lnum) or win_get_cursor(target_win)[1]
+    local list_id = list.current_id(target)
+    state.cursor_line = cursor_line
+    state.saved_view = saved_view
+
+    local signature = list.signature(target, list_id, scope)
+    if state.bufnr
+        and buf_is_valid(state.bufnr)
+        and vim.b[state.bufnr].csub_dirty
+        and vim.b[state.bufnr].csub_list_signature
+        and vim.b[state.bufnr].csub_list_signature ~= signature then
+        vim.notify(
+            "[csub] Existing csub buffer has unsaved changes for another list.",
+            vim.log.levels.WARN
+        )
+        return
+    end
+
+    local bufnr = buffer.ensure_buffer(state, target_win, state.source_bufnr, replace.apply)
     if not bufnr then
         vim.notify("[csub] Unable to prepare csub buffer.", vim.log.levels.ERROR)
         return
     end
 
-    vim.b[bufnr].csub_qf_view = qf_view
+    vim.b[bufnr].csub_saved_view = saved_view
 
-    if vim.b[bufnr].csub_dirty and vim.b[bufnr].csub_qf_id == qf_id then
+    if vim.b[bufnr].csub_dirty and vim.b[bufnr].csub_list_signature == signature then
         vim.b[bufnr].csub_mode = mode
     else
-        buffer.populate(bufnr, current_qflist, mode, { qf_id = qf_id })
+        buffer.populate(bufnr, current_items, mode, {
+            list_id = list_id,
+            target = target,
+            signature = signature,
+            scope = scope,
+        })
     end
 
     window.apply_window_opts(target_win)
-    view.restore(target_win, bufnr, qf_view, cursor_line)
+    view.restore(target_win, bufnr, saved_view, cursor_line)
 end
 
-function M.start()
+function M.start(opts)
+    opts = opts or {}
+    local scope = nil
+    if opts.range and opts.range > 0 and opts.line1 and opts.line2 then
+        scope = { first = opts.line1, last = opts.line2 }
+    end
+
     local current_buf = get_current_buf()
     if state.bufnr and buf_is_valid(state.bufnr) and current_buf == state.bufnr then
+        -- We are in the csub buffer; toggle back to the list window.
         local current_line = win_get_cursor(0)[1]
-        state.qf_cursor = current_line
-        local new_view = view.save(get_current_win(), state.bufnr) or state.qf_view or {}
+        state.cursor_line = current_line
+        local new_view = view.save(get_current_win(), state.bufnr) or state.saved_view or {}
         new_view.lnum = current_line
-        state.qf_view = new_view
-        vim.b[state.bufnr].csub_qf_view = new_view
+        state.saved_view = new_view
+        vim.b[state.bufnr].csub_saved_view = new_view
 
-        local qf_info = vim.fn.getqflist({ qfbufnr = 1 }) or {}
-        local qfbuf = (qf_info.qfbufnr and qf_info.qfbufnr ~= 0) and qf_info.qfbufnr or state.qf_bufnr
+        local target = state.target or { kind = "qf", winid = nil }
+        local info = list.get(target, { qfbufnr = 1 }) or {}
+        local listbuf = (info.qfbufnr and info.qfbufnr ~= 0) and info.qfbufnr or state.source_bufnr
 
-        if qfbuf and buf_is_valid(qfbuf) then
-            window.use_buf(get_current_win(), qfbuf)
-            view.restore(get_current_win(), qfbuf, state.qf_view, state.qf_cursor)
+        if listbuf and buf_is_valid(listbuf) then
+            window.use_buf(get_current_win(), listbuf)
+            view.restore(get_current_win(), listbuf, state.saved_view, state.cursor_line)
         else
-            local qfwin = window.ensure_quickfix_window()
-            if qfwin and win_is_valid(qfwin) then
-                set_current_win(qfwin)
-                view.restore(qfwin, win_get_buf(qfwin), state.qf_view, state.qf_cursor)
+            local listwin = window.ensure_list_window(target)
+            if listwin and win_is_valid(listwin) then
+                set_current_win(listwin)
+                view.restore(listwin, win_get_buf(listwin), state.saved_view, state.cursor_line)
             end
         end
 
-        -- Keep state.bufnr so we can reuse the buffer next time
         return
     end
 
-    open_replace_window()
+    open_replace_window(get_current_win(), scope)
 end
 
 function M.quickfix_text(info)
     return fmt.quickfix_text(info)
 end
 
--- Internal entry point for plugin/csub.lua autocommands.
-M._highlight_qf_buffer = highlight_qf_buffer
+-- Internal entry points for plugin/csub.lua autocommands.
+M._highlight_list_buffer = highlight_list_buffer
+M._refresh_all_list_buffers = refresh_all_list_buffers
 
 -- Optional: override defaults. The plugin works without calling this; the
 -- :Csub command, quickfixtextfunc, autocommands, and highlight groups are
