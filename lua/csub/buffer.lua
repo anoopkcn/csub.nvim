@@ -38,6 +38,15 @@ end
 
 function M.clear_state(bufnr)
     state_by_bufnr[bufnr] = nil
+    pcall(vim.treesitter.stop, bufnr)
+end
+
+local function detect_ft(entry)
+    local name = fmt.normalize_name(entry)
+    if not name or name == "" then return false end
+    local ft = vim.filetype.match({ filename = name })
+    if not ft or ft == "" then return false end
+    return ft
 end
 
 local function clone_entries(qflist)
@@ -49,8 +58,39 @@ local function clone_entries(qflist)
         -- during an edit session, so the hot-path set_metadata reduces to
         -- bare extmark calls.
         entry._csub_chunks = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH })
+        -- Cache the originating filetype (or false). Used to decide
+        -- whether a uniform treesitter parser can be attached for syntax
+        -- highlighting on this csub buffer.
+        entry._csub_ft = detect_ft(entry)
     end
     return entries
+end
+
+--- Decide which treesitter language (if any) to attach to the csub buffer
+--- for the given entries. Returns (lang, distinct_ft_count). lang is nil
+--- when no parser should attach (mixed fts, all entries lacking ft, or
+--- the resolved language's parser isn't installed).
+local function resolve_uniform_lang(entries)
+    local distinct = {}
+    local distinct_count = 0
+    local sample_ft
+    for _, entry in ipairs(entries) do
+        local ft = entry._csub_ft
+        if ft and not distinct[ft] then
+            distinct[ft] = true
+            distinct_count = distinct_count + 1
+            sample_ft = ft
+            if distinct_count > 1 then break end
+        end
+    end
+    if distinct_count ~= 1 then
+        return nil, distinct_count
+    end
+    local ok, lang = pcall(vim.treesitter.language.get_lang, sample_ft)
+    if not ok or not lang then return nil, distinct_count end
+    local has = pcall(vim.treesitter.language.add, lang)
+    if not has then return nil, distinct_count end
+    return lang, distinct_count
 end
 
 local function set_metadata(bufnr, entries)
@@ -217,6 +257,18 @@ function M.populate(bufnr, qflist, mode, opts)
         orig_by_id[entry._csub_id] = entry
     end
 
+    -- Resolve syntax_highlight: opt-in via opts, else inherit from the
+    -- previous state for this buffer, else default-on.
+    local prev_state = state_by_bufnr[bufnr]
+    local syntax_highlight = opts.syntax_highlight
+    if syntax_highlight == nil and prev_state then
+        syntax_highlight = prev_state.syntax_highlight
+    end
+    if syntax_highlight == nil then
+        syntax_highlight = true
+    end
+    local prev_lang = prev_state and prev_state.ts_lang or nil
+
     -- Always assign a fresh state table so any closure holding the old
     -- reference becomes harmlessly stale.
     state_by_bufnr[bufnr] = {
@@ -226,6 +278,8 @@ function M.populate(bufnr, qflist, mode, opts)
         lines = lines,
         orig_by_id = orig_by_id,
         scope = scope,
+        syntax_highlight = syntax_highlight,
+        ts_lang = prev_lang,  -- updated below after attach/swap
     }
 
     vim.b[bufnr].csub_mode = mode
@@ -243,6 +297,26 @@ function M.populate(bufnr, qflist, mode, opts)
     buf_clear_namespace(bufnr, dirty_ns, 0, -1)
     vim.b[bufnr].csub_dirty = false
     vim.bo[bufnr].modified = false
+
+    -- Treesitter parser attach/swap. resolve_uniform_lang returns a
+    -- non-nil lang only when every entry shares one ft AND a parser is
+    -- installed for it. Mixed-ft lists notify once per populate (only
+    -- when highlighting is enabled).
+    local target_lang, distinct_count = resolve_uniform_lang(orig_entries)
+    if not syntax_highlight then
+        target_lang = nil
+    end
+    if target_lang ~= prev_lang then
+        if prev_lang then pcall(vim.treesitter.stop, bufnr) end
+        if target_lang then pcall(vim.treesitter.start, bufnr, target_lang) end
+        state_by_bufnr[bufnr].ts_lang = target_lang
+    end
+    if syntax_highlight and distinct_count >= 2 then
+        vim.notify(
+            ("[csub] %d filetypes in list; syntax highlighting skipped"):format(distinct_count),
+            vim.log.levels.INFO
+        )
+    end
 end
 
 function M.ensure_buffer(state, winid, source_bufnr, on_write)

@@ -59,6 +59,7 @@ local function strip_internal_fields(entries)
         entry._csub_deleted = nil
         entry._csub_id = nil
         entry._csub_chunks = nil
+        entry._csub_ft = nil
     end
     return entries
 end

@@ -44,6 +44,7 @@ local state = {
 local config = {
     handlers = {},
     default_mode = "replace",
+    syntax_highlight = true,
 }
 
 --- Detect mode based on the list's title.
@@ -217,6 +218,7 @@ local function open_replace_window(invoking_winid, scope)
             target = target,
             signature = signature,
             scope = scope,
+            syntax_highlight = config.syntax_highlight,
         })
     end
 
@@ -282,6 +284,10 @@ function M.setup(opts)
 
     if opts.default_mode ~= nil then
         config.default_mode = opts.default_mode
+    end
+
+    if opts.syntax_highlight ~= nil then
+        config.syntax_highlight = opts.syntax_highlight
     end
 end
 
