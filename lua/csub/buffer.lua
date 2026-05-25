@@ -301,9 +301,11 @@ function M.populate(bufnr, qflist, mode, opts)
     -- Treesitter parser attach/swap. resolve_uniform_lang returns a
     -- non-nil lang only when every entry shares one ft AND a parser is
     -- installed for it. Mixed-ft lists notify once per populate (only
-    -- when highlighting is enabled).
+    -- when highlighting is enabled). Only "replace" mode shows entry
+    -- text from source files; other modes (e.g. "buffers") have lines
+    -- that aren't source code, so highlighting doesn't apply.
     local target_lang, distinct_count = resolve_uniform_lang(orig_entries)
-    if not syntax_highlight then
+    if not syntax_highlight or mode ~= "replace" then
         target_lang = nil
     end
     if target_lang ~= prev_lang then
@@ -311,7 +313,7 @@ function M.populate(bufnr, qflist, mode, opts)
         if target_lang then pcall(vim.treesitter.start, bufnr, target_lang) end
         state_by_bufnr[bufnr].ts_lang = target_lang
     end
-    if syntax_highlight and distinct_count >= 2 then
+    if syntax_highlight and mode == "replace" and distinct_count >= 2 then
         vim.notify(
             ("[csub] %d filetypes in list; syntax highlighting skipped"):format(distinct_count),
             vim.log.levels.INFO
