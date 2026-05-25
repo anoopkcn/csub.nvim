@@ -133,6 +133,19 @@ vim.keymap.set("n", "<leader>s", "<cmd>Csub<cr>", { desc = "Csub the current lis
 vim.keymap.set("x", "<leader>s", ":Csub<cr>",     { desc = "Csub the selected entries" })
 ```
 
+If you wan't to only activate the `Csub` command when the quickfix list is open and focused, then use the following autocommand:
+
+```lua
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = { "qf", "csub" },
+    group = vim.api.nvim_create_augroup("CsubQfMap", { clear = true }),
+    callback = function(args)
+        map("n", "<leader>s", "<CMD>Csub<CR>",
+            { buffer = args.buf, silent = true, desc = "Substitute in quickfix (Csub)" })
+    end,
+})
+```
+
 ## Highlight groups
 
 | Group               | Default link  | Purpose                                |
