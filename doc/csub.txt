@@ -21,27 +21,21 @@ A range scopes editing to a slice of the list — see |csub-scope|.
 ==============================================================================
 SETUP                                                              *csub-setup*
 
-The `:Csub` command, the `quickfixtextfunc`, the augroup, and the highlight
-groups are registered automatically at Neovim startup by `plugin/csub.lua`.
-However, csub is OPT-IN: with no `setup()` call, `:Csub` is disabled for
-every list (it prints a message and does nothing). To enable it, either set
-a `default_mode` or list the titles you want handled via `handlers`.
+No setup call is required. The `:Csub` command, the `quickfixtextfunc`, the
+augroup, and the highlight groups are registered automatically at Neovim
+startup by `plugin/csub.lua`. Out of the box, every list opens in "replace"
+mode; call `setup()` only to register per-title handlers (so buffer pickers
+get "buffers" mode, diagnostics get disabled, etc.) or to change the
+fallback used for unmatched lists.
 
-Minimal opt-in (every list gets "replace" mode):
->lua
-    require("csub").setup({ default_mode = "replace" })
-<
-
-Per-list-title configuration:
 >lua
     require("csub").setup({
         handlers = {
-            { match = "FuzzyBuffers", mode = "buffers" },
-            { match = "Grep",         mode = "replace" },
-            { match = "vimgrep",      mode = "replace" },
-            { match = "Diagnostics",  mode = nil       }, -- disable csub
+            { match = "qfbuffers",   mode = "buffers" },
+            { match = "vimgrep",     mode = "replace" },
+            { match = "Diagnostics", mode = nil       }, -- disable csub
         },
-        default_mode = nil, -- unmatched lists stay disabled
+        default_mode = "replace", -- fallback when no handler matches
     })
 <
 
@@ -151,16 +145,16 @@ handlers ~
 
                                                             *csub-default_mode*
 default_mode ~
-    Fallback mode when no handler matches. Default: nil (csub disabled for
-    unmatched lists). Set to "replace" or "buffers" to enable csub on every
-    list that no handler claims.
+    Fallback mode when no handler matches. Default: "replace". Set to nil
+    to disable csub on every unmatched list, or to "buffers" to make all
+    unmatched lists behave like buffer pickers.
 
                                                                   *csub-modes*
 MODES ~
 
 csub supports different modes that change behavior on save:
 
-"replace"                                                  *csub-mode-replace*
+"replace" (default)                                        *csub-mode-replace*
     - Delete line: Remove entry from the list
     - Edit text: Replace the line in the source file
     - Use case: grep results, compiler errors, diagnostics
