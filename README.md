@@ -36,7 +36,7 @@ Edit the current quickfix or location list in a scratch buffer. Write the buffer
 
 ## Installation
 
-The plugin works out of the box — no `setup()` call required. The `:Csub` command, the list metadata column, and the highlight groups are registered automatically at startup by `plugin/csub.lua`.
+The `:Csub` command, the list metadata column, and the highlight groups are registered automatically at startup by `plugin/csub.lua`. However, `:Csub` is disabled by default on every list until you tell it which lists to handle — either by configuring `handlers` or by setting a `default_mode`. See [Configuration](#configuration) for the minimal opt-in.
 
 vim.pack example (Neovim 0.12+):
 ```lua
@@ -62,38 +62,55 @@ use({ "https://github.com/anoopkcn/csub.nvim" })
 
 ## Configuration
 
-`require("csub").setup(opts)` is optional. Call it only if you want to override the defaults:
+`require("csub").setup(opts)` is required to enable `:Csub`. With no setup (or with the defaults below), `:Csub` reports that csub is disabled for the list and does nothing — you have to opt the plugin in either by listing the list titles you want to handle, or by setting a `default_mode` that applies to every unmatched list.
 
 ```lua
 require("csub").setup({
-    -- Handlers to detect mode based on quickfix title
+    -- Per-list-title handlers. The first match wins; non-matching lists
+    -- fall back to default_mode.
     handlers = {
-        { match = "FuzzyBuffers", mode = "buffers" },
-        { match = "Grep",         mode = "replace" },
-        { match = "vimgrep",      mode = "replace" },
-        { match = "Diagnostics",  mode = nil       }, -- disable csub
+        { match = "FuzzyBuffers", mode = "buffers" }, -- buffer picker → close on delete
+        { match = "Grep",         mode = "replace" }, -- :grep results → edit text
+        { match = "vimgrep",      mode = "replace" }, -- :vimgrep results
+        { match = "Diagnostics",  mode = nil       }, -- explicitly off
     },
 
-    -- Fallback mode when no handler matches (default: "replace")
-    default_mode = "replace",
+    -- Fallback for lists that no handler matched. Default: nil (disabled).
+    -- Set to "replace" to make every unmatched list editable.
+    default_mode = nil,
 })
 ```
 
-With lazy.nvim, the usual wiring works:
+The minimal opt-in — make every list use "replace" mode — is one line:
+
+```lua
+require("csub").setup({ default_mode = "replace" })
+```
+
+With lazy.nvim:
 ```lua
 {
   "https://github.com/anoopkcn/csub.nvim",
   config = function()
-    require("csub").setup({ default_mode = "buffers" })
+    require("csub").setup({
+      handlers = {
+        { match = "Grep",    mode = "replace" },
+        { match = "vimgrep", mode = "replace" },
+      },
+    })
   end,
 }
 ```
 
 ### Handlers
 
-Handlers allow csub to behave differently based on what command created the list. Each handler has:
-- `match`: A string to match against the list title (plain text match against the quickfix or loclist title)
-- `mode`: The mode to use when matched
+Each handler is a `{ match, mode }` table:
+- `match`: substring to look for in the list's title (plain text, case-sensitive). Get the title with `vim.fn.getqflist({ title = 1 }).title` (or `getloclist(0, ...)` for a loclist) after running the command that built the list.
+- `mode`: one of `"replace"`, `"buffers"`, or `nil`. `nil` explicitly disables csub for that title (useful for diagnostic lists you never want to edit).
+
+Handlers are checked in order; the first match wins. The same handler list is consulted for both quickfix and location lists, so a single handler entry covers `:grep`/`:lgrep`, `:vimgrep`/`:lvimgrep`, etc. when their titles share a substring.
+
+If no handler matches, csub falls back to `default_mode`. With the default `default_mode = nil`, the unmatched list is left alone.
 
 ### Modes
 

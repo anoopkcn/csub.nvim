@@ -43,7 +43,7 @@ local state = {
 
 local config = {
     handlers = {},
-    default_mode = "replace",
+    default_mode = nil,
     syntax_highlight = true,
 }
 
