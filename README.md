@@ -5,7 +5,7 @@ Edit the current quickfix or location list in a scratch buffer. Write the buffer
 ## Features
 - Opens a quickfix or location list in an editable buffer (`[csub]`, `filetype=csub`)
 - Works on whichever list (quickfix or loclist) you invoke `:Csub` from
-- Shows file/line/col metadata as virtual text beside each entry
+- Shows file/line/col metadata as virtual text beside each entry in the `[csub]` buffer
 - Marks edited lines with a `~` sign in the sign column so changes are visible at a glance
 - Applies changes to the underlying files and the list on write
 - Run `:Csub` to switch back and forth between the list window and the csub buffer
@@ -36,7 +36,7 @@ Edit the current quickfix or location list in a scratch buffer. Write the buffer
 
 ## Installation
 
-The plugin works out of the box — no `setup()` call required. The `:Csub` command, the list metadata column, and the highlight groups are registered automatically at startup by `plugin/csub.lua`. By default every list opens in `"replace"` mode; call `setup()` only to configure per-title `handlers` or change the fallback.
+The plugin works out of the box — no `setup()` call required. The `:Csub` command and the highlight groups are registered automatically at startup by `plugin/csub.lua`; the metadata column appears inside the `[csub]` buffer when you run `:Csub` (csub does not modify the real quickfix/loclist window). By default every list opens in `"replace"` mode; call `setup()` only to configure per-title `handlers` or change the fallback.
 
 vim.pack example (Neovim 0.12+):
 ```lua
@@ -48,12 +48,12 @@ Lazy.nvim example (zero-config):
 { "https://github.com/anoopkcn/csub.nvim" }
 ```
 
-Lazy.nvim example (deferred until the first quickfix command — recommended for true lazy loading):
+Lazy.nvim example (deferred until the first `:Csub` — recommended for true lazy loading):
 ```lua
-{ "https://github.com/anoopkcn/csub.nvim", event = "QuickFixCmdPre" }
+{ "https://github.com/anoopkcn/csub.nvim", cmd = { "Csub" } }
 ```
 
-`cmd = { "Csub" }` is also possible, but with that trigger any quickfix list opened before the first `:Csub` will not get csub's metadata column — the plugin's `quickfixtextfunc` only takes effect once it's loaded.
+csub does nothing until `:Csub` is invoked, so loading on the command is enough — there is no startup behavior that needs to run earlier.
 
 Packer.nvim example:
 ```lua
@@ -158,7 +158,7 @@ vim.api.nvim_create_autocmd("FileType", {
 All are `default = true`, so user overrides take precedence.
 
 ## Notes
-- Metadata is virtual text; line wrapping is disabled locally.
+- In the `[csub]` buffer, metadata is virtual text and line wrapping is disabled locally. The real quickfix/loclist window is left untouched.
 - Dirty-line `~` signs appear in the sign column for every row whose text differs from its originating entry. The signcolumn auto-shows.
 - If the target line changed since the list was built and differs from your edit, the plug-in reports an error and leaves that entry untouched.
 - Running `:Csub` with a different range (or no range vs. ranged) on the same list while you have unsaved edits is treated as a context switch and warns; finish or discard the existing buffer first.

@@ -49,24 +49,6 @@ local function pad_right(s, width)
     return s .. string.rep(" ", pad)
 end
 
-function M.format_meta(entry, opts)
-    local width = (opts and opts.width) or M.META_WIDTH
-    local name = normalize_name(entry)
-    local lnum = entry.lnum or 0
-    local col = entry.col or 0
-
-    -- For context lines (no file, no position), just use padding
-    if is_context_line(entry, name) then
-        return string.rep(" ", width)
-    end
-
-    local suffix = string.format("|%5d:%-4d| ", lnum, col)
-    local name_width = math.max(width - #suffix, 1)
-    local display_name = truncate_path(name, name_width)
-
-    return pad_right(display_name, name_width) .. suffix
-end
-
 function M.format_meta_chunks(entry, opts)
     local width = (opts and opts.width) or M.META_WIDTH
     local name = normalize_name(entry)
@@ -92,29 +74,6 @@ function M.format_meta_chunks(entry, opts)
         { "|", "CsubSeparator" },
         { " ", "CsubMetaFileName" },
     }
-end
-
-function M.quickfix_text(info)
-    local items
-    if info.quickfix == 1 then
-        items = vim.fn.getqflist({ id = info.id, items = 1 }).items
-    else
-        items = vim.fn.getloclist(info.winid, { id = info.id, items = 1 }).items
-    end
-    if not items then
-        return {}
-    end
-
-    -- Pre-allocate table with known size
-    local count = info.end_idx - info.start_idx + 1
-    local lines = {}
-    for i = 1, count do
-        local idx = info.start_idx + i - 1
-        local e = items[idx]
-        local meta = M.format_meta(e, { width = M.META_WIDTH })
-        lines[i] = meta .. (e.text or "")
-    end
-    return lines
 end
 
 return M

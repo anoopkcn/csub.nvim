@@ -8,8 +8,9 @@ INTRODUCTION                                                       *csub-intro*
 
 csub lets you edit the current quickfix or location list in a scratch buffer
 and write the changes back to the original files. It shows a metadata column
-(file|line:col) beside each entry to keep context while editing, and marks
-edited rows with a `~` sign in the sign column.
+(file|line:col) beside each entry in that scratch buffer to keep context while
+editing, and marks edited rows with a `~` sign in the sign column. The real
+quickfix/loclist window is left untouched.
 
 Different modes allow csub to behave appropriately based on the list source:
 - "replace" mode: Edit text to replace lines in source files (grep, make)
@@ -21,9 +22,9 @@ A range scopes editing to a slice of the list — see |csub-scope|.
 ==============================================================================
 SETUP                                                              *csub-setup*
 
-No setup call is required. The `:Csub` command, the `quickfixtextfunc`, the
-augroup, and the highlight groups are registered automatically at Neovim
-startup by `plugin/csub.lua`. Out of the box, every list opens in "replace"
+No setup call is required. The `:Csub` command, the augroup, and the
+highlight groups are registered automatically at Neovim startup by
+`plugin/csub.lua`. Out of the box, every list opens in "replace"
 mode; call `setup()` only to register per-title handlers (so buffer pickers
 get "buffers" mode, diagnostics get disabled, etc.) or to change the
 fallback used for unmatched lists.
@@ -190,7 +191,8 @@ NOTES                                                              *csub-notes*
 - The buffer uses `filetype=csub` and is named `[csub]`. A single shared
   csub buffer is reused across invocations; switching to a different list
   with unsaved edits triggers a warning.
-- The metadata column is virtual text; wrapping is disabled locally.
+- In the `[csub]` buffer, the metadata column is virtual text and wrapping
+  is disabled locally; the real quickfix/loclist window is left untouched.
 - Edited rows are marked with a `~` sign in the sign column (`signcolumn`
   auto-shows). The mark disappears when the line is reverted to its
   original text.

@@ -1,4 +1,4 @@
--- Lazy-require submodules so they only load on first :Csub / first quickfix event.
+-- Lazy-require submodules so they only load on the first :Csub.
 local function lazy_require(name)
     local m
     return setmetatable({}, {
@@ -10,7 +10,6 @@ local function lazy_require(name)
 end
 
 local buffer = lazy_require("csub.buffer")
-local fmt = lazy_require("csub.format")
 local list = lazy_require("csub.list")
 local replace = lazy_require("csub.replace")
 local view = lazy_require("csub.view")
@@ -24,13 +23,8 @@ local win_get_cursor = vim.api.nvim_win_get_cursor
 local get_current_buf = vim.api.nvim_get_current_buf
 local get_current_win = vim.api.nvim_get_current_win
 local set_current_win = vim.api.nvim_set_current_win
-local buf_clear_namespace = vim.api.nvim_buf_clear_namespace
-local buf_set_extmark = vim.api.nvim_buf_set_extmark
-local create_namespace = vim.api.nvim_create_namespace
 
 local M = {}
-
-local qf_ns = create_namespace("csub_qf_meta")
 
 local state = {
     bufnr = nil,
@@ -61,79 +55,6 @@ local function detect_mode(target)
     end
 
     return config.default_mode
-end
-
-local function apply_meta_extmarks(bufnr, items)
-    if not bufnr or not buf_is_valid(bufnr) then return end
-    if not items or #items == 0 then return end
-
-    buf_clear_namespace(bufnr, qf_ns, 0, -1)
-    for idx, entry in ipairs(items) do
-        local chunks = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH })
-        buf_set_extmark(bufnr, qf_ns, idx - 1, 0, {
-            virt_text = chunks,
-            virt_text_pos = "overlay",
-            hl_mode = "replace",
-            priority = 100,
-            strict = false,
-        })
-    end
-end
-
-local function meta_signature(id, changedtick)
-    return string.format("%d:%d", id or 0, changedtick or 0)
-end
-
---- Highlight the metadata column on a quickfix or loclist buffer. Resolves
---- which list owns the buffer and applies extmarks. Skips when the list's
---- (id, changedtick) signature matches the last render — avoids re-walking
---- a large list on every BufWinEnter.
-local function highlight_list_buffer(bufnr)
-    bufnr = bufnr or 0
-    if bufnr == 0 then
-        bufnr = get_current_buf()
-    end
-    local found = list.find_for_buffer(bufnr)
-    if not found then return end
-
-    local sig = meta_signature(found.id, found.changedtick)
-    if vim.b[bufnr].csub_meta_sig == sig then return end
-    vim.b[bufnr].csub_meta_sig = sig
-    apply_meta_extmarks(found.list_bufnr, found.items)
-end
-
---- Refresh metadata extmarks on all quickfix-typed buffers (qf + loclists).
---- Called from QuickFixCmdPost where we don't know which list just changed.
---- Uses the same (id, changedtick) cache as highlight_list_buffer.
-local function refresh_all_list_buffers()
-    local qf_info = vim.fn.getqflist({
-        qfbufnr = 1, items = 1, id = 0, changedtick = 0,
-    })
-    if qf_info.qfbufnr and qf_info.qfbufnr ~= 0 then
-        local sig = meta_signature(qf_info.id, qf_info.changedtick)
-        if vim.b[qf_info.qfbufnr].csub_meta_sig ~= sig then
-            vim.b[qf_info.qfbufnr].csub_meta_sig = sig
-            apply_meta_extmarks(qf_info.qfbufnr, qf_info.items or {})
-        end
-    end
-    for _, win in ipairs(vim.api.nvim_list_wins()) do
-        if list.is_loclist_window(win) then
-            local fi = vim.fn.getloclist(win, { filewinid = 0 })
-            local owner = fi and fi.filewinid or 0
-            if owner ~= 0 then
-                local ll = vim.fn.getloclist(owner, {
-                    qfbufnr = 1, items = 1, id = 0, changedtick = 0,
-                })
-                if ll.qfbufnr and ll.qfbufnr ~= 0 then
-                    local sig = meta_signature(ll.id, ll.changedtick)
-                    if vim.b[ll.qfbufnr].csub_meta_sig ~= sig then
-                        vim.b[ll.qfbufnr].csub_meta_sig = sig
-                        apply_meta_extmarks(ll.qfbufnr, ll.items or {})
-                    end
-                end
-            end
-        end
-    end
 end
 
 local function open_replace_window(invoking_winid, scope)
@@ -264,16 +185,8 @@ function M.start(opts)
     open_replace_window(get_current_win(), scope)
 end
 
-function M.quickfix_text(info)
-    return fmt.quickfix_text(info)
-end
-
--- Internal entry points for plugin/csub.lua autocommands.
-M._highlight_list_buffer = highlight_list_buffer
-M._refresh_all_list_buffers = refresh_all_list_buffers
-
 -- Optional: override defaults. The plugin works without calling this; the
--- :Csub command, quickfixtextfunc, autocommands, and highlight groups are
+-- :Csub command, the FileType autocommand, and the highlight groups are
 -- registered automatically by plugin/csub.lua at startup.
 function M.setup(opts)
     opts = opts or {}
