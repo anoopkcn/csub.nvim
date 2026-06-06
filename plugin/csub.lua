@@ -4,9 +4,7 @@ end
 vim.g.loaded_csub = 1
 
 local set_hl = vim.api.nvim_set_hl
-set_hl(0, "CsubSeparator", { link = "Comment", default = true })
-set_hl(0, "CsubMetaFileName", { link = "Comment", default = true })
-set_hl(0, "CsubMetaNumber", { link = "Number", default = true })
+set_hl(0, "CsubMeta", { link = "Comment", default = true })
 set_hl(0, "CsubDirtyLine", { link = "DiffChange", default = true })
 
 local augroup = vim.api.nvim_create_augroup("csub", { clear = true })

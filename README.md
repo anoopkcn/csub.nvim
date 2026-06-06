@@ -5,7 +5,7 @@ Edit the current quickfix or location list in a scratch buffer. Write the buffer
 ## Features
 - Opens a quickfix or location list in an editable buffer (`[csub]`, `filetype=csub`)
 - Works on whichever list (quickfix or loclist) you invoke `:Csub` from
-- Shows file/line/col metadata as virtual text beside each entry in the `[csub]` buffer
+- Shows a plain `path:line:col` label beside each entry in the `[csub]` buffer (virtual text, aligned to one gutter)
 - Marks edited lines with a `~` sign in the sign column so changes are visible at a glance
 - Applies changes to the underlying files and the list on write
 - Run `:Csub` to switch back and forth between the list window and the csub buffer
@@ -150,9 +150,7 @@ vim.api.nvim_create_autocmd("FileType", {
 
 | Group               | Default link  | Purpose                                |
 |---------------------|---------------|----------------------------------------|
-| `CsubMetaFileName`  | `Comment`     | File-name portion of the metadata col  |
-| `CsubMetaNumber`    | `Number`      | Line/column numbers in the metadata    |
-| `CsubSeparator`     | `Comment`     | `|` separators in the metadata         |
+| `CsubMeta`          | `Comment`     | The `path:line:col` metadata label     |
 | `CsubDirtyLine`     | `DiffChange`  | `~` sign on edited lines               |
 
 All are `default = true`, so user overrides take precedence.

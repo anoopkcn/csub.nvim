@@ -19,6 +19,9 @@ local create_autocmd = vim.api.nvim_create_autocmd
 local ns = vim.api.nvim_create_namespace("csub_meta")
 local dirty_ns = vim.api.nvim_create_namespace("csub_dirty")
 
+-- Spaces between the metadata label and the editable text in the gutter.
+local META_GAP = 2
+
 local M = {}
 
 -- Per-csub-buffer state. Holds the heavy tables that would otherwise be
@@ -53,11 +56,11 @@ local function clone_entries(qflist)
     local entries = vim.deepcopy(qflist or {}, true)
     for i, entry in ipairs(entries) do
         entry._csub_id = i
-        -- Cache the metadata chunks once per entry. Each entry's chunks
-        -- depend only on bufnr/filename/lnum/col, which don't change
-        -- during an edit session, so the hot-path set_metadata reduces to
-        -- bare extmark calls.
-        entry._csub_chunks = fmt.format_meta_chunks(entry, { width = fmt.META_WIDTH })
+        -- Cache the plain "relpath:lnum:col" label once per entry. It depends
+        -- only on bufnr/filename/lnum/col, which don't change during an edit
+        -- session. The padded virt_text chunk is built later in populate(),
+        -- once the gutter width (widest label in the shown slice) is known.
+        entry._csub_label = fmt.meta_label(entry)
         -- Cache the originating filetype (or false). Used to decide
         -- whether a uniform treesitter parser can be attached for syntax
         -- highlighting on this csub buffer.
@@ -98,12 +101,14 @@ local function set_metadata(bufnr, entries)
     local line_count = buf_line_count(bufnr)
     for idx, entry in ipairs(entries) do
         if idx > line_count then break end
-        buf_set_extmark(bufnr, ns, idx - 1, 0, {
-            virt_text = entry._csub_chunks,
-            virt_text_pos = "inline",
-            hl_mode = "combine",
-            strict = false,
-        })
+        if entry._csub_chunks then
+            buf_set_extmark(bufnr, ns, idx - 1, 0, {
+                virt_text = entry._csub_chunks,
+                virt_text_pos = "inline",
+                hl_mode = "combine",
+                strict = false,
+            })
+        end
     end
 end
 
@@ -245,6 +250,22 @@ function M.populate(bufnr, qflist, mode, opts)
         local copy = {}
         for k, v in pairs(entry) do copy[k] = v end
         current_entries[i] = copy
+    end
+
+    -- Align all entries' text to one gutter: width = widest label in the
+    -- shown slice (+ a gap). Computed here, not in clone_entries, so scoped
+    -- ranges align to just the slice the user sees. The padded virt_text
+    -- chunk is cached per entry so set_metadata stays bare extmark calls.
+    local meta_width = 0
+    for _, entry in ipairs(current_entries) do
+        local len = #(entry._csub_label or "")
+        if len > meta_width then meta_width = len end
+    end
+    if meta_width > 0 then meta_width = meta_width + META_GAP end
+    for _, entry in ipairs(current_entries) do
+        entry._csub_chunks = meta_width > 0
+            and fmt.meta_chunk(entry._csub_label or "", meta_width)
+            or nil
     end
 
     local lines = {}

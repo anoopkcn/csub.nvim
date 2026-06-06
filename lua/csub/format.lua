@@ -3,8 +3,6 @@ local M = {}
 -- Cache frequently used API functions
 local buf_get_name = vim.api.nvim_buf_get_name
 
-M.META_WIDTH = 50
-
 function M.normalize_name(entry)
     local name = ""
     if entry.bufnr and entry.bufnr ~= 0 then
@@ -23,19 +21,6 @@ end
 
 local normalize_name = M.normalize_name
 
-local function truncate_path(path, max_width)
-    if #path <= max_width then
-        return path
-    end
-    -- First try shortening path components (e.g., /foo/bar/baz -> /f/b/baz)
-    local short = vim.fn.pathshorten(path)
-    if #short <= max_width then
-        return short
-    end
-    -- If still too long, truncate from left (keep the end)
-    return short:sub(-max_width)
-end
-
 local function is_context_line(entry, name)
     return name == "" and (entry.lnum or 0) == 0 and (entry.col or 0) == 0
 end
@@ -49,31 +34,21 @@ local function pad_right(s, width)
     return s .. string.rep(" ", pad)
 end
 
-function M.format_meta_chunks(entry, opts)
-    local width = (opts and opts.width) or M.META_WIDTH
+-- Plain "relpath:lnum:col" label for an entry. No padding, truncation, or
+-- separators — just the raw position info. Returns "" for context lines
+-- (entries with no file and no position, e.g. compiler context).
+function M.meta_label(entry)
     local name = normalize_name(entry)
-
-    -- For context lines (no file, no position), just use padding
     if is_context_line(entry, name) then
-        return {
-            { string.rep(" ", width), "CsubMetaFileName" },
-        }
+        return ""
     end
+    return string.format("%s:%d:%d", name, entry.lnum or 0, entry.col or 0)
+end
 
-    local lnum = entry.lnum or 0
-    local col = entry.col or 0
-    local suffix = string.format("%5d:%-4d", lnum, col)
-    local name_width = math.max(width - #suffix - 3, 1) -- 3 = two "|" + trailing space
-
-    local display_name = truncate_path(name, name_width)
-
-    return {
-        { pad_right(display_name, name_width), "CsubMetaFileName" },
-        { "|", "CsubSeparator" },
-        { suffix, "CsubMetaNumber" },
-        { "|", "CsubSeparator" },
-        { " ", "CsubMetaFileName" },
-    }
+-- A single virt_text chunk for `label`, right-padded to `width` so all
+-- entries' text aligns to one gutter. One subdued highlight, no separators.
+function M.meta_chunk(label, width)
+    return { { pad_right(label, width), "CsubMeta" } }
 end
 
 return M

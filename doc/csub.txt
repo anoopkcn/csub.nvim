@@ -7,10 +7,10 @@ Source:     https://github.com/anoopkcn/csub.nvim
 INTRODUCTION                                                       *csub-intro*
 
 csub lets you edit the current quickfix or location list in a scratch buffer
-and write the changes back to the original files. It shows a metadata column
-(file|line:col) beside each entry in that scratch buffer to keep context while
-editing, and marks edited rows with a `~` sign in the sign column. The real
-quickfix/loclist window is left untouched.
+and write the changes back to the original files. It shows a plain
+`path:line:col` label beside each entry in that scratch buffer to keep context
+while editing, and marks edited rows with a `~` sign in the sign column. The
+real quickfix/loclist window is left untouched.
 
 Different modes allow csub to behave appropriately based on the list source:
 - "replace" mode: Edit text to replace lines in source files (grep, make)
@@ -180,9 +180,7 @@ HIGHLIGHT GROUPS                                              *csub-highlights*
 
 All groups are defined with `default = true` so user overrides take effect.
 
-`CsubMetaFileName`   linked to `Comment`    — file-name part of the metadata
-`CsubMetaNumber`     linked to `Number`     — line/column numbers
-`CsubSeparator`      linked to `Comment`    — `|` separators in the metadata
+`CsubMeta`           linked to `Comment`    — the `path:line:col` label
 `CsubDirtyLine`      linked to `DiffChange` — `~` sign on edited rows
 
 ==============================================================================
@@ -191,8 +189,9 @@ NOTES                                                              *csub-notes*
 - The buffer uses `filetype=csub` and is named `[csub]`. A single shared
   csub buffer is reused across invocations; switching to a different list
   with unsaved edits triggers a warning.
-- In the `[csub]` buffer, the metadata column is virtual text and wrapping
-  is disabled locally; the real quickfix/loclist window is left untouched.
+- In the `[csub]` buffer, the `path:line:col` label is virtual text and
+  wrapping is disabled locally; the real quickfix/loclist window is left
+  untouched.
 - Edited rows are marked with a `~` sign in the sign column (`signcolumn`
   auto-shows). The mark disappears when the line is reverted to its
   original text.
