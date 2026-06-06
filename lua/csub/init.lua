@@ -129,8 +129,6 @@ local function open_replace_window(invoking_winid, scope)
         return
     end
 
-    vim.b[bufnr].csub_saved_view = saved_view
-
     if vim.b[bufnr].csub_dirty and vim.b[bufnr].csub_list_signature == signature then
         vim.b[bufnr].csub_mode = mode
     else
@@ -162,7 +160,6 @@ function M.start(opts)
         local new_view = view.save(get_current_win(), state.bufnr) or state.saved_view or {}
         new_view.lnum = current_line
         state.saved_view = new_view
-        vim.b[state.bufnr].csub_saved_view = new_view
 
         local target = state.target or { kind = "qf", winid = nil }
         local info = list.get(target, { qfbufnr = 1 }) or {}
