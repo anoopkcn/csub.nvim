@@ -1,5 +1,7 @@
 # csub.nvim
 
+## This plugin is a predecessor to much more capable [stitch.nvim](https://github.com/anoopkcn/stitch.nvim). Please check that out instead
+
 Edit the current quickfix or location list in a scratch buffer. Write the buffer to push the updates back into the original files and the list.
 
 ## Features
